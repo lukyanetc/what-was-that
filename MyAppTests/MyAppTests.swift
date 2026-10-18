@@ -33,13 +33,10 @@ struct DayStoreTests {
         #expect(try String(contentsOf: store.url, encoding: .utf8) == "не json")
     }
 
-    @Test func flattenLinesJoinsEntriesIntoOneLine() throws {
+    @Test func multilineTextIsKeptAsTyped() throws {
         let store = makeStore()
         try store.set("Первая\n\n  вторая  \nтретья", for: "2026-03-10")
-        try store.set("одна строка", for: "2026-03-11")
-        try store.flattenLines()
-        #expect(try store.load() == ["2026-03-10": DayEntry(text: "Первая вторая третья"),
-                                     "2026-03-11": DayEntry(text: "одна строка")])
+        #expect(try store.load()["2026-03-10"]?.text == "Первая\n\n  вторая  \nтретья")
     }
 
     @Test func colorSurvivesTextChangesAndEntryWithOnlyColorIsKept() throws {
@@ -56,6 +53,99 @@ struct DayStoreTests {
     @Test func keyUsesLocalDay() {
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 23, minute: 30))!
         #expect(DayStore.key(for: date) == "2026-03-10")
+    }
+}
+
+struct PeriodTests {
+    private func day(_ month: Int, _ day: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day))!
+    }
+
+    private func period(_ name: String, _ start: Date, _ end: Date) -> Period {
+        Period(name: name, start: start, end: end)
+    }
+
+    @Test func containsIsInclusiveAndIgnoresTime() {
+        let sprint = period("Спринт", day(10, 1), day(10, 24))
+        let evening = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 24, hour: 23, minute: 59))!
+        #expect(sprint.contains(day(10, 1)))
+        #expect(sprint.contains(evening))
+        #expect(!sprint.contains(day(9, 30)))
+        #expect(!sprint.contains(day(10, 25)))
+        #expect(sprint.dayCount == 24)
+    }
+
+    @Test func dayNumberCountsFromOne() {
+        let sprint = period("Спринт", day(10, 1), day(10, 24))
+        #expect(sprint.dayNumber(on: day(10, 1)) == 1)
+        #expect(sprint.dayNumber(on: day(10, 18)) == 18)
+        #expect(sprint.dayNumber(on: day(10, 24)) == sprint.dayCount)
+    }
+
+    @Test func estimatedHeightGrowsWithLengthAndFlagsLongPeriod() {
+        let appearance = Appearance()
+        let week = appearance.estimatedHeight(of: period("Неделя", day(10, 5), day(10, 11)))
+        let quarter = appearance.estimatedHeight(of: period("Квартал", day(10, 5), day(1, 3).addingTimeInterval(86400 * 365)))
+        #expect(week > 0)
+        #expect(quarter > week * 10)
+    }
+
+    @Test func expiredOnlyAfterEndDay() {
+        let sprint = period("Спринт", day(10, 1), day(10, 24))
+        #expect(!sprint.isExpired(on: day(10, 24)))
+        #expect(sprint.isExpired(on: day(10, 25)))
+    }
+
+    @Test func noActivePeriodOutsideAll() {
+        let periods = [period("Спринт", day(10, 1), day(10, 24))]
+        #expect(Period.active(in: periods, on: day(10, 25)) == nil)
+        #expect(Period.active(in: periods, on: day(9, 30)) == nil)
+    }
+
+    @Test func laterStartWinsAndOuterReturnsAfterNestedEnds() {
+        let outer = period("Квартал", day(10, 1), day(12, 31))
+        let nested = period("Спринт", day(10, 10), day(10, 20))
+        #expect(Period.active(in: [outer, nested], on: day(10, 15))?.name == "Спринт")
+        #expect(Period.active(in: [nested, outer], on: day(10, 15))?.name == "Спринт")
+        #expect(Period.active(in: [outer, nested], on: day(10, 21))?.name == "Квартал")
+    }
+
+    @Test func nestedPeriodStandsCloserToDates() {
+        let outer = period("Квартал", day(10, 1), day(12, 31))
+        let nested = period("Спринт", day(10, 10), day(10, 20))
+        let lone = period("Отпуск", day(1, 5), day(1, 10))
+        let lanes = Period.lanes([nested, outer, lone])
+        #expect(lanes[nested.id] == 0)
+        #expect(lanes[outer.id] == 1)
+        #expect(lanes[lone.id] == 0)
+    }
+
+    @Test func partlyOverlappingPeriodsGetDifferentLanes() {
+        let first = period("А", day(10, 1), day(10, 24))
+        let second = period("Б", day(10, 20), day(11, 5))
+        let lanes = Period.lanes([first, second])
+        #expect(Set(lanes.values) == [0, 1])
+    }
+
+    @Test func longestPeriodIsShownAndShorterOnesStayInside() {
+        let outer = period("Квартал", day(10, 1), day(12, 31))
+        let nested = period("Спринт", day(10, 10), day(10, 20))
+        #expect(Period.longest(in: [nested, outer], on: day(10, 15))?.name == "Квартал")
+        #expect(Period.longest(in: [outer, nested], on: day(11, 15))?.name == "Квартал")
+        #expect(Period.longest(in: [outer, nested], on: day(9, 15)) == nil)
+    }
+
+    @Test func equalLengthEarlierStartWins() {
+        let first = period("Первый", day(10, 1), day(10, 10))
+        let second = period("Второй", day(10, 5), day(10, 14))
+        #expect(Period.longest(in: [second, first], on: day(10, 7))?.name == "Первый")
+    }
+
+    @Test func sameStartShorterWins() {
+        let long = period("Долгий", day(10, 1), day(10, 31))
+        let short = period("Короткий", day(10, 1), day(10, 7))
+        #expect(Period.active(in: [long, short], on: day(10, 5))?.name == "Короткий")
+        #expect(Period.active(in: [long, short], on: day(10, 8))?.name == "Долгий")
     }
 }
 

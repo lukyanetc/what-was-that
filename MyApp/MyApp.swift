@@ -16,6 +16,11 @@ private struct MenuContent: View {
         Picker("Режим", selection: Binding(get: { desktop.mode }, set: { desktop.mode = $0 })) {
             ForEach([Mode.solid, .scroll, .edit], id: \.self) { Text($0.rawValue) }
         }
+        Picker("Отрезок", selection: Binding(
+            get: { desktop.appearance.viewKind }, set: { desktop.appearance.viewKind = $0 })
+        ) {
+            ForEach(ViewKind.allCases, id: \.self) { Text($0.title) }
+        }
         Button("Переместить окно") { desktop.mode = .move }
         Button("Настройки…") {
             openWindow(id: "settings")

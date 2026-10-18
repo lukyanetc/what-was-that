@@ -1,8 +1,32 @@
 import SwiftUI
 
+/// Какой отрезок времени показывает окно: непрерывная лента, календарный месяц или неделя (пн–вс).
+enum ViewKind: String, CaseIterable {
+    case feed, month, week, period
+
+    var title: String {
+        switch self {
+        case .feed: "Лента"
+        case .month: "Месяц"
+        case .week: "Неделя"
+        case .period: "Период"
+        }
+    }
+
+    /// Месяц и неделя листаются по отрезкам; лента и период нет.
+    var isPaged: Bool { self == .month || self == .week }
+}
+
 /// Внешний вид: цвет текста (с подстройкой под яркость обоев под лентой), прозрачность, ширина окна,
 /// линия выделения сегодняшнего дня, формат даты и заголовков месяцев. Всё хранится в UserDefaults.
 @Observable final class Appearance {
+    /// Показываемый отрезок времени.
+    var viewKind: ViewKind {
+        didSet {
+            UserDefaults.standard.set(viewKind.rawValue, forKey: "viewKind")
+            onLayoutChange?()
+        }
+    }
     /// Выбранный пользователем цвет (оттенок).
     var color: Color { didSet { UserDefaults.standard.set(color.hex, forKey: "textColor") } }
     /// Подстраивать светлоту цвета под обои.
@@ -13,11 +37,70 @@ import SwiftUI
     var width: Double {
         didSet {
             UserDefaults.standard.set(width, forKey: "windowWidth")
-            onWidthChange?()
+            onLayoutChange?()
         }
     }
     /// Высота затухания ленты у верхнего и нижнего края окна, pt.
     var edgeFade: Double { didSet { UserDefaults.standard.set(edgeFade, forKey: "edgeFade") } }
+    /// Персональные периоды (UserDefaults, JSON). Линии и названия видны во всех видах; режим «Период» показывает активный.
+    var periods: [Period] {
+        didSet {
+            UserDefaults.standard.set(try? JSONEncoder().encode(periods), forKey: "periods")
+            updatePeriodMetrics()
+            onLayoutChange?()
+        }
+    }
+    /// Показывать ли периоды в режиме «Лента». В режиме «Период» они видны всегда, в «Месяце» и «Неделе» их нет.
+    var showsPeriodsInFeed: Bool { didSet { UserDefaults.standard.set(showsPeriodsInFeed, forKey: "showsPeriodsInFeed") } }
+    /// Счётчик дней под названием идущего периода («12 / 90»).
+    var showsPeriodCounter: Bool {
+        didSet {
+            UserDefaults.standard.set(showsPeriodCounter, forKey: "showsPeriodCounter")
+            updatePeriodMetrics()
+        }
+    }
+    /// Отступ первого дня периода от верха окна, pt; в режиме «Переместить окно» двигается мышью по вертикали.
+    /// По умолчанию период стоит ближе к середине экрана (30% высоты).
+    var periodOffset: Double { didSet { UserDefaults.standard.set(periodOffset, forKey: "periodOffset") } }
+
+    /// Место под период в окне: от его начала до низа экрана за вычетом затухания.
+    func periodRoom(screenHeight: Double) -> Double { screenHeight - periodOffset - edgeFade }
+
+    /// Оценка высоты периода в ленте: строки, заголовки месяцев и отступы недель. Нужна настройкам, чтобы
+    /// предупредить, что период не поместится в окно (в самом окне высота измеряется).
+    func estimatedHeight(of period: Period) -> Double {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: period.start)
+        var height = 0.0
+        for offset in 0..<period.dayCount {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
+            height += lineHeight + 2 * rowPadding
+            if calendar.component(.day, from: day) == 1 {
+                if showsMonth { height += lineHeight + 24 }
+            } else if weekGap && calendar.component(.weekday, from: day) == 2 {
+                height += 12
+            }
+        }
+        return height
+    }
+
+    /// «12 / 90» для идущего периода, если счётчик включён.
+    func counterText(_ period: Period) -> String? {
+        guard showsPeriodCounter, period.contains(.now) else { return nil }
+        return "\(period.dayNumber(on: .now)) / \(period.dayCount)"
+    }
+
+    /// Рисуются ли сейчас линии и названия периодов.
+    var showsPeriodMarks: Bool {
+        !periods.isEmpty && (viewKind == .period || (viewKind == .feed && showsPeriodsInFeed))
+    }
+    /// Колонка линии каждого периода (0 ближе к датам) и ширина колонки названий; пересчитываются при смене
+    /// списка, шрифта и регистра, а не при каждой отрисовке строки.
+    private(set) var periodLanes: [UUID: Int] = [:]
+    private(set) var periodTitleWidth = 0.0
+    static let maxTitleWidth = 96.0
+    /// Период, который показывает режим «Период»: самый длинный из идущих сегодня (остальные идут внутри него).
+    var activePeriod: Period? { Period.longest(in: periods, on: .now) }
     /// Цвет и прозрачность линии выделения сегодняшнего дня; nil — цвет текста с прозрачностью 15%.
     var highlight: Color? { didSet { UserDefaults.standard.set(highlight?.hex, forKey: "highlightColor") } }
     /// Формат даты в строке дня (в духе moment.js, см. MomentFormat).
@@ -37,6 +120,7 @@ import SwiftUI
         didSet {
             UserDefaults.standard.set(uppercase, forKey: "uppercase")
             dateColumnWidth = measureDateColumn()
+            updatePeriodMetrics()
         }
     }
     /// Шрифт ленты: семейство из `fonts` или `systemFont` (системный моноширинный).
@@ -44,6 +128,7 @@ import SwiftUI
         didSet {
             UserDefaults.standard.set(fontName, forKey: "fontName")
             dateColumnWidth = measureDateColumn()
+            updatePeriodMetrics()
         }
     }
     /// Размер основного шрифта, pt (по умолчанию 13, как у `.body`).
@@ -51,12 +136,11 @@ import SwiftUI
         didSet {
             UserDefaults.standard.set(fontSize, forKey: "fontSize")
             dateColumnWidth = measureDateColumn()
+            updatePeriodMetrics()
         }
     }
-    /// Несколько строк в дне (Shift+Enter в edit). Выключено: одна строка, остальные строки записи не показываются.
-    var allowsMultiline: Bool { didSet { UserDefaults.standard.set(allowsMultiline, forKey: "allowsMultiline") } }
-    /// Тонкая вертикальная линия между датой и записью; колонка даты при этом фиксированной ширины.
-    var showsDivider: Bool { didSet { UserDefaults.standard.set(showsDivider, forKey: "showsDivider") } }
+    /// Вертикальный отступ сверху и снизу внутри строки дня, pt; расстояние между строками вдвое больше.
+    var rowPadding: Double { didSet { UserDefaults.standard.set(rowPadding, forKey: "rowPadding") } }
     /// Ширина колонки даты, см. `measureDateColumn`.
     private(set) var dateColumnWidth = 0.0
     /// Номер недели (ISO) справа в строке понедельника.
@@ -67,11 +151,12 @@ import SwiftUI
     private(set) var luminance = 0.2
     /// Удалось ли измерить обои (иначе яркость выводится из тёмной/светлой темы системы).
     private(set) var isMeasured = false
-    /// Вызывается при смене ширины: окно подгоняется под неё.
-    @ObservationIgnored var onWidthChange: (() -> Void)?
+    /// Вызывается при смене ширины или отрезка времени: окно подгоняется под них.
+    @ObservationIgnored var onLayoutChange: (() -> Void)?
 
     static let widthRange = 240.0...800.0
     static let fontSizeRange = 10.0...24.0
+    static let rowPaddingRange = 0.0...6.0
     /// 9 пастельных цветов индикатора дня (оттенок, насыщенность 0.52, яркость 0.95); в файле хранится номер.
     static let indicatorColors: [Color] = [0.0, 0.07, 0.14, 0.33, 0.48, 0.6, 0.75, 0.9]
         .map { Color(hue: $0, saturation: 0.52, brightness: 0.95) } + [Color(white: 0.75)]
@@ -95,6 +180,12 @@ import SwiftUI
         let savedFont = defaults.string(forKey: "fontName") ?? Self.systemFont
         fontName = savedFont == Self.systemFont || Self.fonts.contains(savedFont) ? savedFont : Self.systemFont
         fontSize = defaults.object(forKey: "fontSize") as? Double ?? 13
+        viewKind = defaults.string(forKey: "viewKind").flatMap { ViewKind(rawValue: $0) } ?? .feed
+        periods = defaults.data(forKey: "periods").flatMap { try? JSONDecoder().decode([Period].self, from: $0) } ?? []
+        showsPeriodsInFeed = defaults.object(forKey: "showsPeriodsInFeed") as? Bool ?? true
+        showsPeriodCounter = defaults.object(forKey: "showsPeriodCounter") as? Bool ?? false
+        periodOffset = defaults.object(forKey: "periodOffset") as? Double ?? (NSScreen.main?.frame.height ?? 800) * 0.3
+        rowPadding = defaults.object(forKey: "rowPadding") as? Double ?? 2
         color = defaults.string(forKey: "textColor").flatMap { Color(hex: $0) } ?? .white
         adapts = defaults.object(forKey: "adaptsToWallpaper") as? Bool ?? true
         textOpacity = defaults.object(forKey: "textOpacity") as? Double ?? 1
@@ -108,9 +199,8 @@ import SwiftUI
         uppercase = defaults.object(forKey: "uppercase") as? Bool ?? true
         showsWeekNumber = defaults.object(forKey: "showsWeekNumber") as? Bool ?? false
         weekGap = defaults.object(forKey: "weekGap") as? Bool ?? false
-        allowsMultiline = defaults.object(forKey: "allowsMultiline") as? Bool ?? false
-        showsDivider = defaults.object(forKey: "showsDivider") as? Bool ?? false
         dateColumnWidth = measureDateColumn()
+        updatePeriodMetrics()
     }
 
     func weekText(_ date: Date) -> String { MomentFormat.string(from: date, pattern: "W") }
@@ -126,7 +216,29 @@ import SwiftUI
         return font.ascender - font.descender + font.leading
     }
 
+    /// Расстояние от верха строки до визуального центра заглавных букв и цифр.
+    var capCenter: Double {
+        let font = nsFont(size: fontSize)
+        return font.ascender - font.capHeight / 2
+    }
+
+    /// Собранные шрифты по размеру: сборка из дескриптора стоит десятки микросекунд, а строки ленты обращаются
+    /// к шрифту по нескольку раз при каждой перерисовке (на каждое нажатие стрелки в edit).
+    @ObservationIgnored private var fontCache: [Double: NSFont] = [:]
+    @ObservationIgnored private var fontCacheName = ""
+
     private func nsFont(size: Double) -> NSFont {
+        if fontCacheName != fontName {
+            fontCache = [:]
+            fontCacheName = fontName
+        }
+        if let cached = fontCache[size] { return cached }
+        let font = makeFont(size: size)
+        fontCache[size] = font
+        return font
+    }
+
+    private func makeFont(size: Double) -> NSFont {
         let system = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         guard fontName != Self.systemFont else { return system }
         // Шрифты переменные: без явного веса семейство может открыться самым тонким начертанием.
@@ -146,6 +258,28 @@ import SwiftUI
         let widths = (0..<366).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
             .map { (dayText($0) as NSString).size(withAttributes: attributes).width }
         return ceil(widths.max() ?? 0)
+    }
+
+    /// Ширина самой длинной строки текста в основном шрифте.
+    func textWidth(_ text: String) -> Double {
+        let attributes: [NSAttributedString.Key: Any] = [.font: nsFont(size: fontSize)]
+        return text.components(separatedBy: .newlines)
+            .map { ($0 as NSString).size(withAttributes: attributes).width }
+            .max() ?? 0
+    }
+
+    private func updatePeriodMetrics() {
+        periodLanes = Period.lanes(periods)
+        let widest = periods.map { period in
+            max(smallTextWidth(uppercase ? period.name.uppercased() : period.name),
+                counterText(period).map(smallTextWidth) ?? 0)
+        }.max() ?? 0
+        periodTitleWidth = min(ceil(widest), Self.maxTitleWidth)
+    }
+
+    /// Ширина текста в мелком шрифте (названия периодов).
+    func smallTextWidth(_ text: String) -> Double {
+        (text as NSString).size(withAttributes: [.font: nsFont(size: (fontSize * 10 / 13).rounded())]).width
     }
 
     /// Текст записи для показа в ленте: пробел сразу после эмодзи в начале строки сужается вдвое.

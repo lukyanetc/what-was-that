@@ -8,12 +8,19 @@ enum MomentFormat {
         "dddd", "ddd", "dd", "do", "d", "e", "E", "ww", "wo", "w", "WW", "Wo", "W", "gggg", "gg", "GGGG", "GG",
     ].sorted { $0.count > $1.count }
 
-    static func string(from date: Date, pattern: String) -> String {
+    /// Календари создаются один раз: форматируется каждая строка ленты при каждой перерисовке.
+    private static let gregorian: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "en_US")
         calendar.firstWeekday = 1
         calendar.minimumDaysInFirstWeek = 1
-        let iso = Calendar(identifier: .iso8601)
+        return calendar
+    }()
+    private static let isoCalendar = Calendar(identifier: .iso8601)
+
+    static func string(from date: Date, pattern: String) -> String {
+        let calendar = gregorian
+        let iso = isoCalendar
 
         var result = ""
         var rest = Substring(pattern)

@@ -21,8 +21,14 @@ final class DesktopWindow: NSWindow {
     /// Окно занимает весь экран по высоте, в том числе под строкой меню и Dock: система не должна его сдвигать.
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 
-    /// В режиме move мышь только двигает окно по горизонтали, по вертикали окно закреплено.
+    /// В режиме move мышь двигает окно: у ленты (окно на всю высоту) только по горизонтали,
+    /// у месяца и недели (окно по размеру контента) в любое место экрана.
     var isMoveMode = false
+    var canMoveVertically = false
+    /// Вызывается после каждого шага перемещения.
+    var onMoved: (() -> Void)?
+    /// Вертикальный сдвиг мыши, когда окно само по вертикали не двигается (режим «Период»): сдвигает период в окне.
+    var onVerticalDrag: ((Double) -> Void)?
 
     override func sendEvent(_ event: NSEvent) {
         guard isMoveMode else { return super.sendEvent(event) }
@@ -30,7 +36,11 @@ final class DesktopWindow: NSWindow {
         case .leftMouseDragged:
             let area = (screen ?? NSScreen.main)?.frame ?? frame
             let x = min(max(frame.minX + event.deltaX, area.minX), area.maxX - frame.width)
-            setFrameOrigin(NSPoint(x: x, y: frame.minY))
+            // deltaY положителен при движении мыши вниз, а ось y окна направлена вверх.
+            let y = canMoveVertically ? min(max(frame.minY - event.deltaY, area.minY), area.maxY - frame.height) : frame.minY
+            setFrameOrigin(NSPoint(x: x, y: y))
+            if !canMoveVertically { onVerticalDrag?(event.deltaY) }
+            onMoved?()
         case .leftMouseDown, .leftMouseUp:
             break
         default:
@@ -41,10 +51,39 @@ final class DesktopWindow: NSWindow {
 
 /// Окно на уровне обоев + текущий режим.
 @Observable final class DesktopController {
-    var mode = Mode.solid { didSet { apply() } }
+    var mode = Mode.solid {
+        didSet {
+            if oldValue == .move { savePeriodTop() }
+            apply()
+            if oldValue == .edit { fitWindow() }
+        }
+    }
     let appearance = Appearance()
+    /// Период, который окно показывает сейчас: режим «Период», пока период идёт, и только в solid и move.
+    /// Остальные дни при этом прозрачны; в scroll и edit они проявляются, окно и лента не меняются.
+    /// Период, который не помещается в окно, не показывается отдельно: тогда режим «Период» показывает ленту.
+    var shownPeriod: Period? {
+        guard appearance.viewKind == .period, mode == .solid || mode == .move, periodFits else { return nil }
+        return appearance.activePeriod
+    }
+    /// Высота периода в ленте; измеряет статичный слой периода, даже когда он невидим.
+    var periodContentHeight = 0.0
+    var periodFits: Bool { periodContentHeight <= appearance.periodRoom(screenHeight: screenFrame.height) }
+    /// Окно по размеру содержимого (месяц, неделя), а не на весь экран. Период, как и лента, на весь экран.
+    var isCompact: Bool { appearance.viewKind.isPaged }
+    /// Отступ первого дня периода от верха окна (хранится в настройках внешнего вида).
+    var periodOffset: Double {
+        get { appearance.periodOffset }
+        set { appearance.periodOffset = newValue }
+    }
     /// Переносит фокус ввода на соседний день; выставляет лента.
     @ObservationIgnored var moveFocus: ((Int) -> Void)?
+    /// Листает месяц или неделю на соседний отрезок (+1 вперёд, -1 назад); выставляет лента.
+    @ObservationIgnored var shiftPeriod: ((Int) -> Void)?
+    /// Колесо и жесты в scroll: накопленная прокрутка текущего жеста и признак, что он уже перелистнул отрезок.
+    @ObservationIgnored private var scrollAccum = 0.0
+    @ObservationIgnored private var scrollLocked = false
+    @ObservationIgnored private var lastWheelShift = Date.distantPast
 
     @ObservationIgnored private var window: DesktopWindow?
     @ObservationIgnored private var hotKey: HotKey?
@@ -58,14 +97,46 @@ final class DesktopWindow: NSWindow {
     /// Позиция курсора в строке в момент перехода на другой день (стрелка вверх/вниз или Enter).
     @ObservationIgnored private var lastMove: (column: Int, time: Date, step: Int)?
 
-    /// Высота и y окна всегда по всему экрану (лента уходит под строку меню и Dock), ширина из настроек,
-    /// по горизонтали окно целиком на экране.
-    private func fitWindow() {
+    /// Высота содержимого месяца или недели; измеряет лента. По ней подгоняется окно в этих режимах.
+    /// Дробные колебания (меньше пункта) игнорируются, чтобы окно не дёргалось. В edit окно только растёт (когда
+    /// запись переносится на новую строку), но не сжимается: частая смена размера окна сбивала фокус и вызывала
+    /// мигание. После выхода из edit окно подгоняется под актуальную высоту.
+    @ObservationIgnored var periodHeight = 0.0 {
+        didSet {
+            guard abs(periodHeight - oldValue) >= 1, mode != .edit || periodHeight > oldValue else { return }
+            fitWindow()
+        }
+    }
+    /// Верхний край окна месяца или недели (его двигает пользователь в move); nil — под строкой меню.
+    @ObservationIgnored private var periodTop = UserDefaults.standard.object(forKey: "periodTop") as? Double
+
+    /// Запоминает верхний край окна месяца или недели: при смене числа строк (28–31 день) окно растёт вниз,
+    /// а не прыгает, и место сохраняется между запусками.
+    private func savePeriodTop() {
+        // Окно сейчас по размеру содержимого, если при последней подгонке оно было таким (canMoveVertically).
+        guard let window, window.canMoveVertically, periodHeight > 0 else { return }
+        periodTop = window.frame.maxY
+        UserDefaults.standard.set(window.frame.maxY, forKey: "periodTop")
+    }
+
+    /// Лента: высота и y окна по всему экрану (лента уходит под строку меню и Dock). Месяц и неделя: окно по размеру
+    /// содержимого, верхний край на месте, пока пользователь его не передвинет. Ширина из настроек, окно целиком на экране.
+    func fitWindow() {
         guard let window, let screen = (window.screen ?? NSScreen.main)?.frame else { return }
         let width = min(appearance.width, screen.width)
         let x = min(max(window.frame.minX, screen.minX), screen.maxX - width)
-        window.setFrame(NSRect(x: x, y: screen.minY, width: width, height: screen.height), display: true)
+        window.canMoveVertically = isCompact && periodHeight > 0
+        if !isCompact || periodHeight == 0 {
+            window.setFrame(NSRect(x: x, y: screen.minY, width: width, height: screen.height), display: true)
+        } else {
+            let height = min(ceil(periodHeight), screen.height)
+            let top = periodTop ?? screen.maxY - 120
+            let y = min(max(top - height, screen.minY), screen.maxY - height)
+            window.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
+        }
     }
+
+    var screenFrame: NSRect { (window?.screen ?? NSScreen.main)?.frame ?? .zero }
 
     func start() {
         let window = DesktopWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
@@ -82,7 +153,13 @@ final class DesktopWindow: NSWindow {
         fitWindow()
         window.contentView = NSHostingView(rootView: ContentView(desktop: self))
         window.orderFrontRegardless()
-        appearance.onWidthChange = { [weak self] in self?.fitWindow() }
+        appearance.onLayoutChange = { [weak self] in self?.fitWindow() }
+        window.onMoved = { [weak self] in self?.savePeriodTop() }
+        window.onVerticalDrag = { [weak self] delta in
+            guard let self, appearance.viewKind == .period else { return }
+            // Период не выходит за верх экрана и оставляет внизу место хотя бы под одну строку.
+            periodOffset = min(max(periodOffset + delta, appearance.edgeFade), max(screenFrame.height - 100, 0))
+        }
         apply()
 
         // Opt+M: solid → scroll → edit → solid
@@ -116,7 +193,7 @@ final class DesktopWindow: NSWindow {
                 let code = Int(event.keyCode)
                 let isReturn = code != kVK_UpArrow && code != kVK_DownArrow
                 let editor = self.window?.firstResponder as? NSTextView
-                if appearance.allowsMultiline, let editor {
+                if let editor {
                     // Несколько строк в дне: Shift+Enter добавляет строку, стрелки сначала ходят по строкам дня
                     // и переходят на другой день только с первой (вверх) или последней (вниз) строки.
                     if isReturn, event.modifierFlags.contains(.shift) {
@@ -146,6 +223,31 @@ final class DesktopWindow: NSWindow {
                 return event
             }
             return nil
+        }
+        // Месяц и неделя в scroll и edit: один жест (или щелчок колеса) листает на один отрезок.
+        NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, mode == .scroll || mode == .edit, appearance.viewKind.isPaged else { return event }
+            // Прокрутка вниз (контент уезжает вверх) — следующий отрезок; направление уже учитывает натуральную прокрутку.
+            let step = event.scrollingDeltaY < 0 ? 1 : -1
+            if event.phase.contains(.began) || event.phase.contains(.mayBegin) {
+                scrollAccum = 0
+                scrollLocked = false
+            }
+            if event.phase.isEmpty && event.momentumPhase.isEmpty {
+                // Колесо мыши: щелчки приходят без фаз, повторы подряд сглаживаем паузой.
+                if event.scrollingDeltaY != 0, Date.now.timeIntervalSince(lastWheelShift) > 0.25 {
+                    lastWheelShift = .now
+                    shiftPeriod?(step)
+                }
+            } else if !scrollLocked {
+                scrollAccum += event.scrollingDeltaY
+                if abs(scrollAccum) > 30 {
+                    scrollLocked = true
+                    scrollAccum = 0
+                    shiftPeriod?(step)
+                }
+            }
+            return event
         }
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.lastUserInput = .now
@@ -189,6 +291,8 @@ final class DesktopWindow: NSWindow {
         }
         guard let window, window.isKeyWindow, let editor = window.firstResponder as? NSTextView else { return false }
         collapseSelection()
+        // Текст поля прозрачен (буквы рисует Text поверх него), а курсор по умолчанию берёт цвет текста: задаём явно.
+        editor.insertionPointColor = NSColor(appearance.textColor)
         editor.updateInsertionPointStateAndRestartTimer(true)
         editor.needsDisplay = true
         return true

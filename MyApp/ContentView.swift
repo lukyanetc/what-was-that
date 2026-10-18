@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Лента дней: 180 дней назад и 180 вперёд от сегодняшнего. В edit текст каждого дня редактируется.
+/// Лента дней: год назад от самой ранней записи и два года вперёд от сегодняшнего дня, либо один месяц или неделя
+/// (см. `ViewKind`). В edit текст каждого дня редактируется.
 struct ContentView: View {
     let desktop: DesktopController
     @State private var entries: [String: DayEntry] = [:]
@@ -18,6 +19,19 @@ struct ContentView: View {
     /// Сегодняшний день и лента вокруг него; обновляются при смене даты.
     @State private var today = Calendar.current.startOfDay(for: .now)
     @State private var days = ContentView.days(around: Calendar.current.startOfDay(for: .now))
+    /// Месяц и неделя: на сколько отрезков окно сдвинуто от текущего (листание в scroll и edit; в solid всегда 0).
+    @State private var periodOffset = 0
+    /// Курсор ушёл за край отрезка стрелкой или Enter: +1 — встанет на первый день следующего, -1 — на последний предыдущего.
+    @State private var pendingEdge: Int?
+    /// Ширина колонки записей (одинакова у всех строк); по ней решается, можно ли рисовать запись поверх поля.
+    @State private var recordWidth = 0.0
+    /// Текущая попытка поставить курсор (см. `focusEditor`); новая отменяет предыдущую.
+    @State private var focusTask: Task<Void, Never>?
+    /// Высота первого дня идущего периода (с названием), см. `periodAnchor`.
+    @State private var periodItemHeight = 0.0
+    /// Положение строк начала и конца периодов в окне ленты, см. `StickyPeriodTitles`.
+    @State private var periodFrames = PeriodFrames()
+    private static let feedSpace = "feed"
 
     private static let calendar = Calendar.current
     /// «Сегодня» стоит примерно на трети высоты окна.
@@ -27,11 +41,40 @@ struct ContentView: View {
     /// Насколько полоса «сегодня» выходит влево за текст. ScrollView обрезает содержимое по своим границам,
     /// поэтому этот запас задан отступом внутри ленты, а не отступом окна.
     private static let highlightInset = 35.0
+    /// Линия периода: толщина и промежуток до соседней линии и до дат.
+    private static let lineWidth = 1.5
+    private static let lineGap = 3.0
+    /// Промежуток между названием периода и линиями.
+    private static let titleGap = 6.0
     /// Дополнительный отступ перед понедельником, когда он включён.
     private static let weekGapHeight = 12.0
 
-    private static func days(around today: Date) -> [Date] {
-        (-180...180).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+    /// Самый ранний день с записью (ключи "yyyy-MM-dd" сортируются как строки).
+    private static func earliestDay(in entries: [String: DayEntry]) -> Date? {
+        guard let key = entries.keys.min() else { return nil }
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    /// Дни окна. Лента: см. ниже. Месяц и неделя: один отрезок, сдвинутый на `offset` отрезков от текущего.
+    private static func days(around today: Date, earliest: Date? = nil, kind: ViewKind = .feed, offset: Int = 0) -> [Date] {
+        if kind != .feed {
+            let component: Calendar.Component = kind == .month ? .month : .weekOfYear
+            // Неделя всегда с понедельника, независимо от региональных настроек.
+            var cal = kind == .month ? calendar : Calendar(identifier: .iso8601)
+            cal.timeZone = calendar.timeZone
+            guard let anchor = cal.date(byAdding: component, value: offset, to: today),
+                  let interval = cal.dateInterval(of: component, for: anchor) else { return [today] }
+            let count = cal.dateComponents([.day], from: interval.start, to: interval.end).day ?? 0
+            return (0..<count).compactMap { cal.date(byAdding: .day, value: $0, to: interval.start) }
+        }
+        // Год назад от самой ранней записи (или от сегодня, если она позже) и два года вперёд от сегодняшнего дня.
+        let anchor = min(earliest ?? today, today)
+        let first = calendar.date(byAdding: .year, value: -1, to: anchor) ?? today
+        let last = calendar.date(byAdding: .year, value: 2, to: today) ?? today
+        let count = calendar.dateComponents([.day], from: first, to: last).day ?? 0
+        return (0...count).compactMap { calendar.date(byAdding: .day, value: $0, to: first) }
     }
 
     var body: some View {
@@ -39,44 +82,51 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(days, id: \.self) { day in
-                        VStack(alignment: .leading, spacing: 0) {
-                            if desktop.appearance.showsMonth && isMonthStart(day) {
-                                Text(desktop.appearance.monthText(day))
-                                    .bold(desktop.appearance.monthBold)
-                                    .opacity(Self.mutedOpacity)
-                                    .padding(.vertical, 12)
-                            }
-                            row(day)
-                        }
-                        // Отступ перед понедельником; у заголовка месяца свой отступ, первый день не сдвигаем.
-                        .padding(.top, desktop.appearance.weekGap && isMonday(day) && !isMonthStart(day) ? Self.weekGapHeight : 0)
+                        dayItem(day, reportsFrames: true)
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.leading, Self.highlightInset)
+                .padding(.leading, leadingInset)
+                // Месяц, неделя и период: окно по размеру содержимого, поля сверху и снизу равны затуханию у краёв,
+                // чтобы строки не попадали в затухание.
+                .padding(.vertical, desktop.isCompact ? desktop.appearance.edgeFade : 0)
+                .onGeometryChange(for: Double.self) { $0.size.height } action: { height in
+                    if desktop.isCompact { desktop.periodHeight = height }
+                }
             }
             .scrollIndicators(.hidden)
+            .coordinateSpace(name: Self.feedSpace)
+            // Названия периодов в scroll и edit: под лентой (не поверх полей ввода), плавно едут по линии.
+            .background(alignment: .topLeading) {
+                StickyPeriodTitles(desktop: desktop, days: days, frames: periodFrames, leadingInset: leadingInset,
+                                   visibleRange: $visibleRange)
+            }
             .onScrollTargetVisibilityChange(idType: Date.self, threshold: 0.9) { ids in
                 let indices = ids.compactMap { days.firstIndex(of: $0) }
                 if let first = indices.min(), let last = indices.max() { visibleRange = first...last }
             }
             .onAppear {
                 reload()
-                proxy.scrollTo(today, anchor: Self.todayAnchor)
+                scrollHome(proxy)
                 desktop.moveFocus = { step in move(by: step, proxy: proxy) }
+                desktop.shiftPeriod = { step in periodOffset += step }
             }
+            // Смена отрезка (настройки, меню) и листание в scroll: набор дней строится заново.
+            .onChange(of: desktop.appearance.viewKind) {
+                periodOffset = 0
+                rebuildDays(proxy)
+            }
+            .onChange(of: periodOffset) { rebuildDays(proxy) }
+            // Сменился идущий период (правка списка, начало или конец) или его место в окне: лента встаёт заново.
+            .onChange(of: activePeriodStart) { restorePosition(proxy) }
+            .onChange(of: periodItemHeight) { restorePosition(proxy) }
+            .onChange(of: desktop.periodOffset) { restorePosition(proxy) }
             // После смены ширины лента возвращается на место: в solid к сегодняшнему дню, в остальных режимах
             // к верхнему из видимых дней.
-            // Режим «несколько строк» выключили: все записи склеиваются в одну строку (в файле тоже).
-            .onChange(of: desktop.appearance.allowsMultiline) { _, isOn in
-                guard !isOn else { return }
-                flush()
-                try? DayStore().flattenLines()
-                reload()
-            }
             .onChange(of: desktop.appearance.width) { restorePosition(proxy) }
             // Смена размера шрифта меняет высоту строк: лента возвращается на место так же.
             .onChange(of: desktop.appearance.fontSize) { restorePosition(proxy) }
+            .onChange(of: desktop.appearance.rowPadding) { restorePosition(proxy) }
             .onChange(of: focusedDay) { _, day in
                 if let day {
                     pickerDay = nil
@@ -97,14 +147,25 @@ struct ContentView: View {
                     }
                 }
                 if oldMode == .edit { focusedDay = nil }
-                // Выход из просмотра возвращает ленту к сегодняшнему дню.
-                if mode == .solid { proxy.scrollTo(today, anchor: Self.todayAnchor) }
+                // Выход из просмотра возвращает ленту к сегодняшнему дню (месяц и неделю к текущему отрезку).
+                if mode == .solid {
+                    periodOffset = 0
+                    if activePeriodStart == nil {
+                        scrollHome(proxy)
+                    } else {
+                        // Лента под слоем периода встаёт на место, когда слой уже её закрыл (не видно прыжка).
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            if desktop.mode == .solid { scrollHome(proxy) }
+                        }
+                    }
+                }
             }
             // Ленивая лента при первой прокрутке к далёкой строке оценивает её положение приблизительно:
             // после отрисовки при запуске прокручиваем ещё раз, уже точно.
             .task {
                 try? await Task.sleep(for: .milliseconds(150))
-                if desktop.mode == .solid { proxy.scrollTo(today, anchor: Self.todayAnchor) }
+                if desktop.mode == .solid { scrollHome(proxy) }
             }
             // Окно становится key не сразу: активация приложения асинхронна. Фокус, поставленный до этого,
             // не даёт курсора (лента «листает фокус», но курсора нет), поэтому ставим его заново, когда окно готово.
@@ -117,11 +178,17 @@ struct ContentView: View {
             .task {
                 for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) {
                     today = Self.calendar.startOfDay(for: .now)
-                    days = Self.days(around: today)
-                    if desktop.mode == .solid { proxy.scrollTo(today, anchor: Self.todayAnchor) }
+                    // Период мог начаться или кончиться: окно подгоняется заново.
+                    rebuildDays(proxy)
+                    desktop.fitWindow()
+                    if desktop.mode == .solid { scrollHome(proxy) }
                 }
             }
         }
+        // Режим «Период» в solid: ленту заменяет статичный слой периода, лента под ним невидима. В остальных видах
+        // лента остаётся без этих надстроек.
+        .modifier(PeriodSwap(isActive: desktop.appearance.viewKind == .period,
+                             hidesContent: desktop.shownPeriod != nil, layer: periodLayer))
         // Без отступов сверху и снизу: лента уходит за края окна, а затухание у краёв создаёт ощущение бесконечности.
         .mask { edgeFadeMask }
         .font(desktop.appearance.font)
@@ -129,6 +196,261 @@ struct ContentView: View {
         .padding(.trailing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) { modeIndicator }
+    }
+
+    /// Положение строк начала и конца периодов в окне ленты (верх и низ, pt). По нему названия в scroll и edit плавно
+    /// едут по линии. Это отдельный наблюдаемый объект: при прокрутке обновляется только слой названий, а не вся лента.
+    @Observable fileprivate final class PeriodFrames {
+        var frames: [Date: ClosedRange<Double>] = [:]
+    }
+
+    /// Название периода в строке его первого дня, слева от линий (solid и move).
+    private struct PeriodTitles: View {
+        let desktop: DesktopController
+        let day: Date
+
+        var body: some View {
+            let appearance = desktop.appearance
+            if appearance.showsPeriodMarks, desktop.shownPeriod != nil {
+                let calendar = Calendar.current
+                // Период, начавшийся раньше показанного, получает название в первой строке показанного периода.
+                let shownStart = desktop.shownPeriod.map { calendar.startOfDay(for: $0.start) }
+                VStack(alignment: .trailing, spacing: 0) {
+                    ForEach(appearance.periods.filter { period in
+                        let start = calendar.startOfDay(for: period.start)
+                        return max(start, shownStart ?? start) == day
+                    }) { period in
+                        ContentView.titleText(period, appearance)
+                    }
+                }
+                .offset(x: -ContentView.titleOffset(appearance))
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// Названия периодов в scroll и edit: стоят у верхнего края окна, пока период виден, и плавно едут по линии.
+    /// До начала периода название едет вместе со строкой начала, в конце упирается в нижнюю границу периода.
+    private struct StickyPeriodTitles: View {
+        let desktop: DesktopController
+        let days: [Date]
+        let frames: PeriodFrames
+        let leadingInset: Double
+        @Binding var visibleRange: ClosedRange<Int>
+
+        /// Индекс дня в ленте; вне ленты: до первого дня -1, после последнего `days.count`.
+        private func index(of day: Date) -> Int {
+            if let index = days.firstIndex(of: day) { return index }
+            return day < (days.first ?? day) ? -1 : days.count
+        }
+
+        /// Верх названия каждого видимого периода в окне ленты.
+        private func placedTitles(_ appearance: Appearance) -> [(period: Period, y: Double)] {
+            let calendar = Calendar.current
+            // Верхняя граница названия: ниже затухания у края окна.
+            let stickyY = appearance.edgeFade
+            var items: [(period: Period, y: Double)] = []
+            for period in appearance.periods {
+                let start = calendar.startOfDay(for: period.start)
+                let end = calendar.startOfDay(for: period.end)
+                let first = index(of: start), last = index(of: end)
+                // Начало выше окна (идёт сверху вниз) или в окне; ниже окна период ещё не виден.
+                let yStart: Double
+                if first < visibleRange.lowerBound {
+                    yStart = -.infinity
+                } else if first > visibleRange.upperBound {
+                    continue
+                } else if let frame = frames.frames[start] {
+                    yStart = frame.lowerBound + appearance.rowPadding
+                } else {
+                    continue
+                }
+                let yEnd: Double
+                if last > visibleRange.upperBound {
+                    yEnd = .infinity
+                } else if last < visibleRange.lowerBound {
+                    continue
+                } else if let frame = frames.frames[end] {
+                    yEnd = frame.upperBound - appearance.rowPadding
+                } else {
+                    continue
+                }
+                let height = ContentView.titleHeight(period, appearance)
+                items.append((period, max(min(max(stickyY, yStart), yEnd - height), yStart)))
+            }
+            // Названия, которые сошлись в одном месте, встают одно под другим.
+            return items.sorted { $0.y < $1.y }.reduce(into: [(period: Period, y: Double)]()) { result, item in
+                let below = result.last.map { $0.y + ContentView.titleHeight($0.period, appearance) } ?? -.infinity
+                result.append((item.period, max(item.y, below)))
+            }
+        }
+
+        var body: some View {
+            let appearance = desktop.appearance
+            if appearance.showsPeriodMarks, desktop.shownPeriod == nil {
+                ZStack(alignment: .topLeading) {
+                    ForEach(placedTitles(appearance), id: \.period.id) { item in
+                        ContentView.titleText(item.period, appearance)
+                            .offset(x: leadingInset - ContentView.titleOffset(appearance), y: item.y)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// Название периода: мелкий приглушённый шрифт, по правому краю колонки названий, рамка высотой в строку даты.
+    /// Под названием идущего периода, если включён счётчик, стоит «12 / 90».
+    private static func titleText(_ period: Period, _ appearance: Appearance) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(appearance.uppercase ? period.name.uppercased() : period.name)
+                .frame(width: appearance.periodTitleWidth, height: appearance.lineHeight, alignment: .trailing)
+            if let counter = appearance.counterText(period) {
+                Text(counter)
+                    .frame(width: appearance.periodTitleWidth, height: appearance.lineHeight, alignment: .trailing)
+            }
+        }
+        .font(appearance.smallFont)
+        .opacity(mutedOpacity)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    /// Высота названия: одна строка, а со счётчиком две.
+    private static func titleHeight(_ period: Period, _ appearance: Appearance) -> Double {
+        appearance.lineHeight * (appearance.counterText(period) == nil ? 1 : 2)
+    }
+
+    /// Расстояние от левого края дат до левого края колонки названий (колонка названий → линии → даты).
+    private static func titleOffset(_ appearance: Appearance) -> Double {
+        let edge = appearance.showsWeekNumber ? highlightInset : 4
+        let lines = Double((appearance.periodLanes.values.max() ?? 0) + 1) * (lineWidth + lineGap)
+        return edge + lines + titleGap + appearance.periodTitleWidth
+    }
+
+    private var lanes: [UUID: Int] { desktop.appearance.periodLanes }
+
+    /// Правый край колонки линий: за колонкой номеров недель (если она включена), иначе у самых дат.
+    private var lineColumnEdge: Double { desktop.appearance.showsWeekNumber ? Self.highlightInset : 4 }
+
+    /// Левый край линии периода; колонка 0 (вложенные) ближе к датам.
+    private func lineX(_ id: UUID) -> Double {
+        -(lineColumnEdge + Self.lineGap + Self.lineWidth + Double(lanes[id] ?? 0) * (Self.lineWidth + Self.lineGap))
+    }
+
+    /// Ширина колонок линий (внешняя линия дальше всех от дат).
+    private var lineColumnWidth: Double {
+        guard let maxLane = lanes.values.max() else { return 0 }
+        return Double(maxLane + 1) * (Self.lineWidth + Self.lineGap)
+    }
+
+    /// Ширина колонки названий слева от линий: по самому длинному названию, но не больше `Appearance.maxTitleWidth`.
+    private var titleWidth: Double { desktop.appearance.periodTitleWidth }
+
+    /// Отступ ленты слева: запас под полосу «сегодня» и номера недель, а при периодах ещё под линии и названия.
+    private var leadingInset: Double {
+        guard desktop.appearance.showsPeriodMarks else { return Self.highlightInset }
+        let lines = max(Self.highlightInset, lineColumnEdge + lineColumnWidth + 2)
+        return lines + (titleWidth > 0 ? Self.titleGap + titleWidth : 0)
+    }
+
+    /// Первый день идущего периода в режиме «Период».
+    private var activePeriodStart: Date? {
+        // Период, который не помещается в окно, отдельно не показывается: лента встаёт на «сегодня».
+        guard desktop.appearance.viewKind == .period, desktop.periodFits else { return nil }
+        return desktop.appearance.activePeriod.map { Self.calendar.startOfDay(for: $0.start) }
+    }
+
+    /// День ленты: заголовок месяца, строка дня и линии периодов. Один и тот же вид в ленте и в статичном слое периода.
+    private func dayItem(_ day: Date, reportsFrames: Bool = false) -> some View {
+        // Строки начала и конца периодов сообщают своё положение в окне ленты (для плавных названий в scroll и edit).
+        let calendar = Self.calendar
+        let isBoundary = reportsFrames && desktop.appearance.showsPeriodMarks && desktop.appearance.periods.contains {
+            calendar.startOfDay(for: $0.start) == day || calendar.startOfDay(for: $0.end) == day
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            if desktop.appearance.showsMonth && isMonthStart(day) {
+                Text(desktop.appearance.monthText(day))
+                    .bold(desktop.appearance.monthBold)
+                    .opacity(Self.mutedOpacity)
+                    .padding(.vertical, 12)
+            }
+            row(day)
+                .background(alignment: .topLeading) { periodLines(on: day, starting: true) }
+                .onGeometryChange(for: ClosedRange<Double>?.self) { proxy in
+                    guard isBoundary else { return nil }
+                    let frame = proxy.frame(in: .named(Self.feedSpace))
+                    return frame.minY...frame.maxY
+                } action: { range in
+                    if let range { periodFrames.frames[day] = range }
+                }
+        }
+        // Отступ перед понедельником; у заголовка месяца свой отступ, первый день не сдвигаем.
+        .padding(.top, desktop.appearance.weekGap && isMonday(day) && !isMonthStart(day) ? Self.weekGapHeight : 0)
+        // Линии периодов, начавшихся раньше, идут через заголовки месяцев и отступы без разрыва.
+        .background(alignment: .topLeading) { periodLines(on: day, starting: false) }
+        // Высота первого дня периода нужна, чтобы лента встала так же, как стоит статичный слой периода.
+        .onGeometryChange(for: Double.self) { $0.size.height } action: { height in
+            if day == activePeriodStart { periodItemHeight = height }
+        }
+    }
+
+    /// Режим «Период» в solid и move: дни идущего периода отдельным статичным слоем, начало на `periodOffset` pt
+    /// ниже верха окна (точно, без прокрутки). Лента под ним невидима, но стоит так же и проявляется в scroll и edit.
+    @ViewBuilder private var periodLayer: some View {
+        // В edit слой убран: его поля ввода дублировали бы поля ленты (общий фокус). К этому моменту он уже невидим.
+        if desktop.appearance.viewKind == .period, desktop.mode != .edit, let period = desktop.appearance.activePeriod {
+            let start = Self.calendar.startOfDay(for: period.start)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<period.dayCount, id: \.self) { offset in
+                    if let day = Self.calendar.date(byAdding: .day, value: offset, to: start) { dayItem(day) }
+                }
+            }
+            // Высота периода решает, поместится ли он в окно (иначе режим показывает ленту).
+            .onGeometryChange(for: Double.self) { $0.size.height } action: { desktop.periodContentHeight = $0 }
+            .padding(.leading, leadingInset)
+            .padding(.top, desktop.periodOffset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .opacity(desktop.shownPeriod != nil ? 1 : 0)
+            .animation(.easeOut(duration: 0.25), value: desktop.shownPeriod != nil)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Где в окне стоит первый день периода: на `periodOffset` pt ниже верха окна. Якорь прокрутки задаёт долю
+    /// высоты, в которой лежит одна и та же точка строки и окна, поэтому высота строки вычитается.
+    private var periodAnchor: UnitPoint {
+        let free = desktop.screenFrame.height - periodItemHeight
+        guard free > 0 else { return .top }
+        return UnitPoint(x: 0, y: min(max(desktop.periodOffset / free, 0), 1))
+    }
+
+    /// Домашняя позиция ленты: при идущем периоде («Период») его начало на заданном месте, иначе «сегодня».
+    private func scrollHome(_ proxy: ScrollViewProxy) {
+        if let start = activePeriodStart, days.contains(start) {
+            proxy.scrollTo(start, anchor: periodAnchor)
+        } else {
+            proxy.scrollTo(today, anchor: Self.todayAnchor)
+        }
+    }
+
+    /// Тонкие вертикальные линии слева от дат на протяжении периодов. `starting`: только периоды, начинающиеся
+    /// в этот день (линия идёт от их названия), иначе только начавшиеся раньше. Ближе к датам стоят вложенные.
+    private func periodLines(on day: Date, starting: Bool) -> some View {
+        let active = !desktop.appearance.showsPeriodMarks ? [] : desktop.appearance.periods.filter {
+            $0.contains(day) && (Self.calendar.startOfDay(for: $0.start) == day) == starting
+        }
+        return ZStack(alignment: .topLeading) {
+            ForEach(active) { period in
+                Rectangle()
+                    .fill(desktop.appearance.textColor.opacity(0.6 * desktop.appearance.textOpacity))
+                    .frame(width: Self.lineWidth)
+                    .offset(x: lineX(period.id))
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
     }
 
     /// Маска: лента плавно уходит в прозрачность у верхнего и нижнего края окна.
@@ -156,8 +478,8 @@ struct ContentView: View {
         .font(desktop.appearance.font)
         .foregroundStyle(desktop.appearance.textColor)
         .padding(.horizontal)
-        // Ниже строки меню: окно уходит под неё.
-        .padding(.top, 56)
+        // Лента: ниже строки меню, окно уходит под неё. Месяц и неделя: окно небольшое и стоит где угодно.
+        .padding(.top, desktop.isCompact ? 8 : 56)
         .opacity(isIndicatorVisible ? 0.5 : 0)
         .task(id: desktop.mode) {
             isIndicatorVisible = true
@@ -173,7 +495,6 @@ struct ContentView: View {
         let label = desktop.appearance.dayText(day)
         let isWeekend = Self.calendar.isDateInWeekend(day)
         let key = DayStore.key(for: day)
-        let multiline = desktop.appearance.allowsMultiline
         // Дата стоит на уровне первой строки записи, остальные строки идут под ней в колонке записей.
         return HStack(alignment: .firstTextBaseline, spacing: Self.dotGap) {
             Text(label)
@@ -187,32 +508,38 @@ struct ContentView: View {
                 // Пока раскрыт выбор цвета, поля ввода нет вовсе: даже скрытое, оно заставляет курсор мыши
                 // над рядом цветов становиться текстовым. Вместо него обычный текст.
                 if desktop.mode == .edit && pickerDay != day {
-                    TextField("", text: binding(for: key), axis: multiline ? .vertical : .horizontal)
-                        .textFieldStyle(.plain)
-                        .lineLimit(multiline ? 1...20 : 1...1)
-                        // Поле растёт вниз по мере переноса текста на новые строки.
-                        .fixedSize(horizontal: false, vertical: true)
-                        .fadedLikeText(desktop.appearance)
-                        .focused($focusedDay, equals: day)
+                    // Буквы рисует тот же Text, что и в solid (поле ввода рисует тот же шрифт на пиксель иначе, и
+                    // записи «подскакивали» при входе в edit). Поле остаётся для курсора, выделения и ввода, а его
+                    // собственный текст прозрачен. Если строка шире колонки, она переносится, и перенос в поле
+                    // и в Text мог бы отличаться: тогда текст показывает само поле.
+                    let text = entries[key]?.text ?? ""
+                    let overlaysText = fitsInColumn(text)
+                    ZStack(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+                        // Несколько строк в дне (Shift+Enter): запись переносится и растёт вниз.
+                        TextField("", text: binding(for: key), axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .lineLimit(1...20)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(overlaysText ? Color.clear : desktop.appearance.textColor)
+                            .opacity(desktop.appearance.textOpacity)
+                            .focused($focusedDay, equals: day)
+                        if overlaysText {
+                            recordText(AttributedString(text))
+                                .allowsHitTesting(false)
+                        }
+                    }
                 } else {
                     let text = entries[key]?.text ?? ""
-                    if multiline {
-                        // Несколько строк: текст, дойдя до края окна, переносится на следующую строку и виден целиком.
-                        Text(desktop.appearance.displayText(text.trimmingCharacters(in: .newlines)))
-                            .fadedLikeText(desktop.appearance)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        // Одна строка: что не влезло, обрезается многоточием.
-                        Text(desktop.appearance.displayText(text))
-                            .fadedLikeText(desktop.appearance)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    recordText(desktop.appearance.displayText(text.trimmingCharacters(in: .newlines)))
                 }
             }
+            .onGeometryChange(for: Double.self) { $0.size.width } action: { recordWidth = $0 }
             .opacity(pickerDay == day ? 0 : 1)
+        }
+        // Названия периодов, начинающихся в этот день: слева от линий, в отдельной колонке (название → линия → даты).
+        // Под строкой, а не поверх: слой над полем ввода в edit заставлял ленту дребезжать.
+        .background(alignment: .topLeading) {
+            PeriodTitles(desktop: desktop, day: day)
         }
         // Номер недели стоит слева от даты, в запасе под полосу «сегодня», и не сдвигает текст.
         .overlay(alignment: .topLeading) {
@@ -225,16 +552,7 @@ struct ContentView: View {
                     .offset(x: -Self.highlightInset, y: 0)
             }
         }
-        .padding(.vertical, Self.rowPadding)
-        // Линия в оверлее строки с отступами: у соседних дней она идёт сплошной.
-        .overlay(alignment: .leading) {
-            if desktop.appearance.showsDivider {
-                Rectangle()
-                    .frame(width: 1)
-                    .opacity(0.25)
-                    .offset(x: desktop.appearance.dateColumnWidth + Self.dotGap / 2)
-            }
-        }
+        .padding(.vertical, desktop.appearance.rowPadding)
         .overlay(alignment: .topLeading) { indicator(for: day) }
         .overlay(alignment: .topLeading) {
             if pickerDay == day {
@@ -254,8 +572,20 @@ struct ContentView: View {
         }
     }
 
-    /// Вертикальный отступ внутри строки дня (сверху и снизу).
-    private static let rowPadding = 2.0
+    /// Запись в ленте (solid, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
+    private func recordText(_ text: AttributedString) -> some View {
+        // Текст, дойдя до края окна, переносится на следующую строку и виден целиком.
+        Text(text)
+            .fadedLikeText(desktop.appearance)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Помещается ли самая длинная строка записи в колонку записей (с запасом на отступы поля ввода).
+    private func fitsInColumn(_ text: String) -> Bool {
+        recordWidth > 0 && desktop.appearance.textWidth(text) + 8 <= recordWidth
+    }
+
     /// Индикатор — вертикальная планка: ширина, а высота одиночного дня как доля высоты строки.
     private static let dotWidth = 4.0
     private static let markerHeightFactor = 0.8
@@ -266,10 +596,11 @@ struct ContentView: View {
     /// Левый край индикатора: сразу за колонкой даты, перед записью.
     private var dotX: Double { desktop.appearance.dateColumnWidth + Self.dotGap }
 
-    /// Высота центра индикатора в строке высотой `height`: середина первой строки записи
-    /// (у однострочного дня это середина строки).
+    /// Высота центра индикатора в строке: визуальный центр заглавных букв и цифр первой строки записи
+    /// (середина между базовой линией и верхом заглавных), где стоит дата. Не геометрический центр строки:
+    /// у большинства шрифтов он выше или ниже и планка выглядела бы сдвинутой.
     private func centerY(in height: Double) -> Double {
-        min(height / 2, Self.rowPadding + desktop.appearance.lineHeight / 2)
+        desktop.appearance.rowPadding + desktop.appearance.capCenter
     }
 
     private func indicatorColor(_ day: Date) -> Int? {
@@ -369,11 +700,16 @@ struct ContentView: View {
         .padding(.leading, -Self.highlightInset)
     }
 
+    /// Верхний полностью видимый день (индекс зажат в границы: набор дней мог смениться).
+    private var topVisibleDay: Date {
+        days[min(visibleRange.lowerBound, days.count - 1)]
+    }
+
     private func restorePosition(_ proxy: ScrollViewProxy) {
-        if desktop.mode == .solid {
-            proxy.scrollTo(today, anchor: Self.todayAnchor)
+        if desktop.mode == .solid || (desktop.mode == .move && activePeriodStart != nil) {
+            scrollHome(proxy)
         } else {
-            proxy.scrollTo(days[visibleRange.lowerBound], anchor: .top)
+            proxy.scrollTo(topVisibleDay, anchor: .top)
         }
     }
 
@@ -401,17 +737,20 @@ struct ContentView: View {
     /// Ставит курсор в поле заново: на сегодня, если оно на экране, иначе на верхний видимый день.
     private func focusEditor() {
         focusedDay = nil
-        Task {
+        // Предыдущая попытка отменяется: иначе каждое didBecomeKey (в том числе от переоткрытия окна в refreshCaret)
+        // запускало бы ещё один цикл, циклы копились, переоткрывали окно друг за другом, и лента мигала.
+        focusTask?.cancel()
+        focusTask = Task {
             await Task.yield()
-            guard desktop.mode == .edit else { return }
+            guard !Task.isCancelled, desktop.mode == .edit else { return }
             let todayIsVisible = days.firstIndex(of: today).map(visibleRange.contains) ?? false
             focusedDay = editingDay.flatMap { days.contains($0) ? $0 : nil }
-                ?? (todayIsVisible ? today : days[visibleRange.lowerBound])
+                ?? (todayIsVisible ? today : topVisibleDay)
             // Фокус уже стоит, но курсор при повторном входе в edit может не нарисоваться, пока окно не стало key:
             // повторяем попытку (до секунды), пока курсор не заработает.
             for attempt in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(100))
-                guard desktop.mode == .edit else { return }
+                guard !Task.isCancelled, desktop.mode == .edit else { return }
                 if desktop.refreshCaret(attempt: attempt) { break }
             }
         }
@@ -419,8 +758,15 @@ struct ContentView: View {
 
     /// Переносит фокус на соседний день (вызывается из монитора клавиш окна).
     private func move(by step: Int, proxy: ScrollViewProxy) {
-        guard let current = focusedDay, let index = days.firstIndex(of: current),
-              days.indices.contains(index + step) else { return }
+        guard let current = focusedDay, let index = days.firstIndex(of: current) else { return }
+        // Месяц и неделя: за краем отрезка идёт соседний отрезок, как в ленте.
+        if !days.indices.contains(index + step) {
+            if desktop.appearance.viewKind.isPaged {
+                pendingEdge = step
+                periodOffset += step
+            }
+            return
+        }
         let target = index + step
         focusedDay = days[target]
         // Лента стоит, пока фокус идёт по окну. У края она едет вслед по одной строке: показываем строку на
@@ -434,6 +780,39 @@ struct ContentView: View {
 
     private func reload() {
         entries = (try? DayStore().load()) ?? [:]
+        // Начало ленты зависит от самой ранней записи; меняем массив, только если границы сдвинулись.
+        let newDays = buildDays()
+        if newDays != days { days = newDays }
+    }
+
+    private func buildDays() -> [Date] {
+        let kind = desktop.appearance.viewKind
+        return Self.days(around: today, earliest: Self.earliestDay(in: entries),
+                         kind: kind.isPaged ? kind : .feed, offset: periodOffset)
+    }
+
+    /// Набор дней сменился: курсор edit и видимый диапазон относились к прежнему набору.
+    private func rebuildDays(_ proxy: ScrollViewProxy) {
+        days = buildDays()
+        visibleRange = 0...0
+        editingDay = pendingEdge.map { $0 > 0 ? days.first : days.last } ?? nil
+        pendingEdge = nil
+        pickerDay = nil
+        if !desktop.appearance.viewKind.isPaged {
+            scrollHome(proxy)
+            // Ленивая лента точно встаёт на место только после отрисовки: прокручиваем с паузой.
+            Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                scrollHome(proxy)
+            }
+        }
+        if desktop.mode == .edit {
+            focusedDay = nil
+            Task {
+                try? await Task.sleep(for: .milliseconds(50))
+                if desktop.mode == .edit { focusEditor() }
+            }
+        }
     }
 
     /// Пишет день в файл. Если запись не удалась, день остаётся в dirty и сохранится при следующей попытке.
@@ -446,6 +825,24 @@ struct ContentView: View {
 
     private func flush() {
         for key in dirty { save(key) }
+    }
+}
+
+/// Режим «Период»: лента скрывается (плавно) и поверх неё лежит статичный слой периода. Вне этого режима вид не меняется.
+private struct PeriodSwap<Layer: View>: ViewModifier {
+    let isActive: Bool
+    let hidesContent: Bool
+    let layer: Layer
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content
+                .opacity(hidesContent ? 0 : 1)
+                .animation(.easeOut(duration: 0.25), value: hidesContent)
+                .overlay(alignment: .topLeading) { layer }
+        } else {
+            content
+        }
     }
 }
 

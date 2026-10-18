@@ -40,25 +40,6 @@ struct DayStore {
         try write(days)
     }
 
-    /// Склеивает многострочные записи в одну строку (при выключении режима «несколько строк»).
-    func flattenLines() throws {
-        var days = try load()
-        var changed = false
-        for (key, entry) in days where entry.text.contains(where: \.isNewline) {
-            days[key]?.text = Self.flatten(entry.text)
-            changed = true
-        }
-        if changed { try write(days) }
-    }
-
-    /// Переносы строк заменяются пробелом, пустые строки и пробелы по краям строк отбрасываются.
-    static func flatten(_ text: String) -> String {
-        text.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-    }
-
     private func write(_ days: [String: DayEntry]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
