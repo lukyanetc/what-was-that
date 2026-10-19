@@ -152,6 +152,18 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Data") {
+                HStack {
+                    Button("Export Data as JSON…") { Export.save(markdown: false) }
+                    Button("Export Data as Markdown…") { Export.save(markdown: true) }
+                }
+                HStack {
+                    Button("Data Folder…") { Export.chooseDataFolder() }
+                    Button("Show File in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([DayStore.defaultURL])
+                    }
+                }
+            }
             Section {
                 HStack {
                     Button("Export Settings…") { appearance.exportSettings() }
