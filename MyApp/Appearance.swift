@@ -213,6 +213,8 @@ enum NoteApp: String, CaseIterable {
     static let indicatorOpacity = 0.65
 
     static let systemFont = "System"
+    /// Шрифт по умолчанию (первый запуск): встроенный JetBrains Mono.
+    static let defaultFont = "JetBrains Mono"
     /// Встроенные шрифты Google Fonts (лицензия OFL, файлы в MyApp/Fonts), все с кириллицей.
     static let fonts = ["JetBrains Mono", "IBM Plex Mono", "Fira Code", "Geist Mono"]
 
@@ -226,9 +228,9 @@ enum NoteApp: String, CaseIterable {
         _ = Self.registerFonts
         let defaults = UserDefaults.standard
         // Сохранённый шрифт, которого больше нет в списке (например, убранный Inter), заменяется системным.
-        let savedFont = defaults.string(forKey: "fontName") ?? Self.systemFont
+        let savedFont = defaults.string(forKey: "fontName") ?? Self.defaultFont
         fontName = savedFont == Self.systemFont || Self.fonts.contains(savedFont) ? savedFont : Self.systemFont
-        fontSize = defaults.object(forKey: "fontSize") as? Double ?? 13
+        fontSize = defaults.object(forKey: "fontSize") as? Double ?? 14
         viewKind = defaults.string(forKey: "viewKind").flatMap { ViewKind(rawValue: $0) } ?? .feed
         periods = defaults.data(forKey: "periods").flatMap { try? JSONDecoder().decode([Period].self, from: $0) } ?? []
         showsPeriodsInFeed = defaults.object(forKey: "showsPeriodsInFeed") as? Bool ?? true
@@ -238,7 +240,7 @@ enum NoteApp: String, CaseIterable {
         color = defaults.string(forKey: "textColor").flatMap { Color(hex: $0) } ?? .white
         adapts = defaults.object(forKey: "adaptsToWallpaper") as? Bool ?? true
         textOpacity = defaults.object(forKey: "textOpacity") as? Double ?? 1
-        width = defaults.object(forKey: "windowWidth") as? Double ?? 360
+        width = defaults.object(forKey: "windowWidth") as? Double ?? 400
         edgeFade = defaults.object(forKey: "edgeFade") as? Double ?? 48
         highlight = defaults.string(forKey: "highlightColor").flatMap { Color(hex: $0) }
         dateFormat = defaults.string(forKey: "dateFormatPattern") ?? "DD ddd"
@@ -247,7 +249,7 @@ enum NoteApp: String, CaseIterable {
         monthBold = defaults.object(forKey: "monthBold") as? Bool ?? false
         uppercase = defaults.object(forKey: "uppercase") as? Bool ?? true
         showsWeekNumber = defaults.object(forKey: "showsWeekNumber") as? Bool ?? false
-        weekGap = defaults.object(forKey: "weekGap") as? Bool ?? false
+        weekGap = defaults.object(forKey: "weekGap") as? Bool ?? true
         eventsMode = defaults.string(forKey: "eventsMode").flatMap { EventsMode(rawValue: $0) } ?? .hide
         eventCalendarIDs = Set(defaults.stringArray(forKey: "eventCalendarIDs") ?? [])
         noteApp = defaults.string(forKey: "noteApp").flatMap { NoteApp(rawValue: $0) } ?? .obsidian

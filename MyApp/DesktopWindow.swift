@@ -174,7 +174,13 @@ final class DesktopWindow: NSWindow {
         window.hasShadow = false
         window.isReleasedWhenClosed = false
         // Положение запоминается между запусками, но из него берётся только x (см. fitWindow).
+        let hasSavedFrame = UserDefaults.standard.object(forKey: "NSWindow Frame d-cal") != nil
         window.setFrameAutosaveName("d-cal")
+        // Первый запуск (положения ещё нет): левый край окна на трети ширины экрана. Дальше работает запомненное
+        // положение (его двигает пользователь в режиме move).
+        if !hasSavedFrame, let screen = NSScreen.main?.frame {
+            window.setFrameOrigin(NSPoint(x: screen.minX + screen.width / 3, y: screen.minY))
+        }
         // Размер окна задаётся до того, как появится лента: иначе она прокручивается к сегодняшнему дню
         // в окне нулевого размера и после подгонки оказывается не на месте.
         self.window = window
