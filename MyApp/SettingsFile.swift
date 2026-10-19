@@ -107,7 +107,7 @@ extension Appearance {
         do {
             try settingsJSON().write(to: url, options: .atomic)
         } catch {
-            Self.showAlert("Could not save the settings", error.localizedDescription)
+            Export.alert("Could not save the settings", error.localizedDescription)
         }
     }
 
@@ -121,14 +121,7 @@ extension Appearance {
         do {
             try applySettings(Data(contentsOf: url))
         } catch {
-            Self.showAlert("Could not load the settings", "The file doesn't look like What Was That!? settings.")
+            Export.alert("Could not load the settings", "The file doesn't look like What Was That!? settings.")
         }
-    }
-
-    private static func showAlert(_ title: String, _ text: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = text
-        alert.runModal()
     }
 }

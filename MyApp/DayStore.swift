@@ -47,9 +47,24 @@ struct DayStore {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
+    /// Ключи уже посчитанных дат. Ключ дня нужен строке ленты по нескольку раз за отрисовку (запись, стрелка, индикатор,
+    /// события), а форматирование даты стоит заметно дороже поиска в словаре. Смещение пояса входит в ключ кэша:
+    /// при смене часового пояса прежние значения не используются.
+    private struct CacheKey: Hashable {
+        let date: Date
+        let offset: Int
+    }
+    private static var keyCache: [CacheKey: String] = [:]
+
     /// Ключ дня в локальном часовом поясе: "2026-03-10".
     static func key(for date: Date) -> String {
-        date.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
+        let cacheKey = CacheKey(date: date, offset: TimeZone.current.secondsFromGMT(for: date))
+        if let cached = keyCache[cacheKey] { return cached }
+        let key = date.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
+        // Ограничение размера: лента на три года это порядка тысячи дат, остальное случайные запросы.
+        if keyCache.count > 5000 { keyCache.removeAll() }
+        keyCache[cacheKey] = key
+        return key
     }
 
     /// Нет файла → пустой дневник. Битый файл → ошибка (чтобы не затереть его при сохранении).

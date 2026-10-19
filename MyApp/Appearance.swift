@@ -475,16 +475,29 @@ enum Wallpaper {
             height: window.height / screen.height * visibleHeight)
     }
 
-    /// Средняя яркость обоев под окном (0...1) или nil, если картинку обоев получить не удалось
-    /// (например, у динамических и видеообоев её может не быть).
-    static func luminance(under window: CGRect, on screen: NSScreen) -> Double? {
-        guard let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+    /// Последняя прочитанная уменьшенная картинка обоев. Декодирование большого файла занимает десятки миллисекунд
+    /// (Xcode предупреждал о задержке главного потока), а яркость пересчитывается при каждой смене режима и Space:
+    /// картинка читается заново, только если сменился файл обоев или время его изменения.
+    private static var cachedThumbnail: (url: URL, modified: Date?, image: CGImage)?
+
+    private static func thumbnail(for url: URL) -> CGImage? {
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        if let cached = cachedThumbnail, cached.url == url, cached.modified == modified { return cached.image }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceCreateThumbnailWithTransform: true,
                   kCGImageSourceThumbnailMaxPixelSize: 512,
               ] as CFDictionary)
+        else { return nil }
+        cachedThumbnail = (url, modified, image)
+        return image
+    }
+
+    /// Средняя яркость обоев под окном (0...1) или nil, если картинку обоев получить не удалось
+    /// (например, у динамических и видеообоев её может не быть).
+    static func luminance(under window: CGRect, on screen: NSScreen) -> Double? {
+        guard let url = NSWorkspace.shared.desktopImageURL(for: screen), let image = thumbnail(for: url)
         else { return nil }
         let width = Double(image.width), height = Double(image.height)
         let fraction = cropRect(window: window, screen: screen.frame, imageSize: CGSize(width: width, height: height))

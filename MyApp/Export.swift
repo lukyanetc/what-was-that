@@ -104,7 +104,8 @@ enum Export {
         NotificationCenter.default.post(name: .dataFolderChanged, object: nil)
     }
 
-    private static func alert(_ title: String, _ text: String) {
+    /// Окно с сообщением об ошибке (общее для экспорта, папки данных и файла настроек).
+    static func alert(_ title: String, _ text: String) {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = text

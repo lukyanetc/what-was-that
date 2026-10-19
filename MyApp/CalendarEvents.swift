@@ -68,7 +68,11 @@ struct CalendarEvent: Identifiable {
     func load(days: [Date], calendarIDs: Set<String>) {
         guard let first = days.first, let last = days.last else { return }
         let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last
-        range = first...end
+        let newRange = first...end
+        // Тот же диапазон и те же календари: выборка уже на месте. Выход в scroll и обновление ленты больше не читают
+        // события заново (запрос за три года идёт в главном потоке); правки в календаре приходят через EKEventStoreChanged.
+        guard newRange != range || calendarIDs != self.calendarIDs else { return }
+        range = newRange
         self.calendarIDs = calendarIDs
         reload()
     }

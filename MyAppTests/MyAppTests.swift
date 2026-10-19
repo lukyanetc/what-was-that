@@ -95,6 +95,16 @@ struct DayStoreTests {
         #expect(try new.load()["2026-03-11"]?.text == "новая запись")
     }
 
+    @Test func keyIsStableAcrossRepeatedCallsAndDistinguishesDays() {
+        let calendar = Calendar.current
+        let first = calendar.date(from: DateComponents(year: 2026, month: 12, day: 31))!
+        let next = calendar.date(byAdding: .day, value: 1, to: first)!
+        // Повторный вызов берёт значение из кэша и не должен отличаться от первого.
+        #expect(DayStore.key(for: first) == "2026-12-31")
+        #expect(DayStore.key(for: first) == "2026-12-31")
+        #expect(DayStore.key(for: next) == "2027-01-01")
+    }
+
     @Test func keyUsesLocalDay() {
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 23, minute: 30))!
         #expect(DayStore.key(for: date) == "2026-03-10")
