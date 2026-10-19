@@ -98,7 +98,7 @@ struct ContentView: View {
                 .padding(.leading, leadingInset)
                 // Месяц, неделя и период: окно по размеру содержимого, поля сверху и снизу равны затуханию у краёв,
                 // чтобы строки не попадали в затухание.
-                .padding(.vertical, desktop.isCompact ? desktop.appearance.edgeFade : 0)
+                .padding(.vertical, desktop.isCompact ? desktop.edgeFade : 0)
                 .onGeometryChange(for: Double.self) { $0.size.height } action: { height in
                     if desktop.isCompact { desktop.periodHeight = height }
                 }
@@ -303,7 +303,7 @@ struct ContentView: View {
 
     /// Маска: лента плавно уходит в прозрачность у верхнего и нижнего края окна.
     private var edgeFadeMask: some View {
-        let fade = desktop.appearance.edgeFade
+        let fade = desktop.edgeFade
         return VStack(spacing: 0) {
             LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: fade)
             Rectangle()

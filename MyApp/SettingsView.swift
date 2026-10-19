@@ -42,6 +42,7 @@ struct SettingsView: View {
             case .ranges: rangesTab
             case .appearance: appearanceTab
             case .notes: notesTab
+            case .about: aboutTab
             }
             Divider()
             HStack(spacing: 4) {
@@ -64,11 +65,12 @@ struct SettingsView: View {
         }
         // Моноширинный стиль, как у ленты.
         .fontDesign(.monospaced)
-        .frame(width: 500, height: 580)
+        // Строка ползунка: название 96 + значение 120 + ползунок 260 pt и отступы формы.
+        .frame(width: 560, height: 580)
     }
 
     private enum Tab: CaseIterable {
-        case general, ranges, appearance, notes
+        case general, ranges, appearance, notes, about
 
         var title: String {
             switch self {
@@ -76,6 +78,7 @@ struct SettingsView: View {
             case .ranges: "Ranges"
             case .appearance: "Appearance"
             case .notes: "Notes"
+            case .about: "About"
             }
         }
 
@@ -85,6 +88,7 @@ struct SettingsView: View {
             case .ranges: "calendar.badge.clock"
             case .appearance: "paintbrush"
             case .notes: "note.text"
+            case .about: "person.crop.circle"
             }
         }
     }
@@ -217,19 +221,18 @@ struct SettingsView: View {
     private var appearanceTab: some View {
         Form {
             Section("Text") {
-                ColorPicker("Color", selection: $appearance.color, supportsOpacity: false)
+                colorRow("Color", selection: $appearance.color)
                 Toggle("Adapt to wallpaper", isOn: $appearance.adapts)
-                Slider(value: $appearance.textOpacity, in: 0.2...1) { Text("Opacity") }
+                sliderRow("Opacity", value: $appearance.textOpacity, in: 0.2...1,
+                          shows: "\(Int(appearance.textOpacity * 100)) %")
                 Picker("Font", selection: $appearance.fontName) {
                     Text("System").tag(Appearance.systemFont)
                     ForEach(Appearance.fonts, id: \.self) { Text($0).tag($0) }
                 }
-                Slider(value: $appearance.fontSize, in: Appearance.fontSizeRange, step: 1) {
-                    Text("Font size: \(Int(appearance.fontSize))")
-                }
-                Slider(value: $appearance.rowPadding, in: Appearance.rowPaddingRange, step: 1) {
-                    Text("Row spacing: \(Int(appearance.rowPadding * 2))")
-                }
+                sliderRow("Font size", value: $appearance.fontSize, in: Appearance.fontSizeRange, step: 1,
+                          shows: "\(Int(appearance.fontSize)) pt")
+                sliderRow("Row spacing", value: $appearance.rowPadding, in: Appearance.rowPaddingRange, step: 1,
+                          shows: "\(Int(appearance.rowPadding * 2)) pt")
                 Toggle("Uppercase", isOn: $appearance.uppercase)
                 Text(appearance.isMeasured
                      ? "Wallpaper under the feed: \(appearance.luminance < 0.5 ? "dark" : "light") (\(Int(appearance.luminance * 100))%)"
@@ -238,15 +241,77 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Window") {
-                Slider(value: $appearance.width, in: Appearance.widthRange, step: 10) { Text("Width") }
-                Slider(value: $appearance.edgeFade, in: 0...150, step: 5) { Text("Edge fade") }
+                // Ширина: Width → поле для ручного ввода → px → счётчик со стрелками → ползунок.
+                sliderRow("Width", value: widthBinding, in: Appearance.widthRange, step: 10) {
+                    HStack(spacing: 6) {
+                        TextField("", value: widthBinding, format: .number.grouping(.never))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 52)
+                        Text("px").font(.caption).foregroundStyle(.secondary)
+                        Stepper("", value: widthBinding, in: Appearance.widthRange, step: 10)
+                            .labelsHidden()
+                    }
+                }
+                // Без числа и без шага (шаг рисует риски на ползунке): затухание подбирается на глаз.
+                // Пустой текст, а не EmptyView: у пустого вида рамка колонки значения игнорируется, и ползунок съезжал влево.
+                sliderRow("Edge fade", value: $appearance.edgeFade, in: 0...150) { Text("") }
+                Text("Fades the feed at the top and bottom of the screen. Works only when the window is full height (Feed and Range views).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Today Highlight") {
-                ColorPicker("Color and opacity",
-                            selection: Binding(get: { appearance.highlightColor }, set: { appearance.highlight = $0 }))
+                colorRow("Color", selection: highlightColorBinding)
+                sliderRow("Opacity", value: highlightOpacityBinding, in: 0.02...1,
+                          shows: "\(Int(highlightAlpha * 100)) %")
             }
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: About
+
+    private static let repoURL = URL(string: "https://github.com/lukyanetc/d-cal")
+
+    /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
+    private var aboutTab: some View {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        return VStack(spacing: 14) {
+            Spacer(minLength: 0)
+            Image("FaceML")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 150)
+                .padding(12)
+                // Рисунок чёрными линиями: на белой плашке он читается и в тёмной теме.
+                .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            Text("D-Cal").font(.title2.bold())
+            Text("Version \(version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Hi, I'm Maks. I make small, quiet tools for the desktop. D-Cal is a calendar strip that lives on your wallpaper and stays out of the way. More about me soon.")
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+            VStack(spacing: 6) {
+                link("Source on GitHub", Self.repoURL)
+                link("Notes app guide", Self.notesGuide)
+                link("Date format guide", Self.formatGuide)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+
+    /// Ссылка: синяя и подчёркнутая, как «Format info».
+    @ViewBuilder
+    private func link(_ title: String, _ url: URL?) -> some View {
+        if let url {
+            Link(destination: url) {
+                Text(title).underline().foregroundStyle(.blue)
+            }
+        }
     }
 
     // MARK: Notes
@@ -259,27 +324,23 @@ struct SettingsView: View {
                 }
                 switch appearance.noteApp {
                 case .obsidian:
-                    TextField("Vault", text: $appearance.obsidianVault)
-                    TextField("Folder (optional)", text: $appearance.obsidianFolder)
-                    TextField("File name", text: $appearance.obsidianFileFormat)
-                    LabeledContent("Example") {
-                        Text(MomentFormat.string(from: .now, pattern: appearance.obsidianFileFormat))
-                    }
+                    noteField("Vault", text: $appearance.obsidianVault, prompt: "Vault name")
+                    noteField("Folder", text: $appearance.obsidianFolder, prompt: "optional, e.g. Daily")
+                    noteField("File name", text: $appearance.obsidianFileFormat, prompt: "YYYY-MM-DD")
+                    exampleRow(MomentFormat.string(from: .now, pattern: appearance.obsidianFileFormat))
                     Text("In Edit mode, the arrow at the end of a row creates the day's note in Obsidian (if it doesn't exist) and opens it. After that the arrow opens the same note in Scroll and Edit.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .appleNotes:
-                    TextField("Folder (optional)", text: $appearance.appleNotesFolder)
-                    TextField("Note name", text: $appearance.appleNotesFormat)
-                    LabeledContent("Example") {
-                        Text(MomentFormat.string(from: .now, pattern: appearance.appleNotesFormat))
-                    }
+                    noteField("Folder", text: $appearance.appleNotesFolder, prompt: "optional, default folder")
+                    noteField("Note name", text: $appearance.appleNotesFormat, prompt: "YYYY-MM-DD")
+                    exampleRow(MomentFormat.string(from: .now, pattern: appearance.appleNotesFormat))
                     Text("In Edit mode, the arrow at the end of a row creates the day's note in Notes (if it doesn't exist) and opens it. After that the arrow opens the same note in Scroll and Edit. The first time, macOS asks for permission to control Notes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .manual:
-                    TextField("Link or file path template", text: $appearance.noteTemplate)
-                    LabeledContent("Example") { Text(appearance.noteTemplateExample).lineLimit(1).truncationMode(.middle) }
+                    noteField("Template", text: $appearance.noteTemplate, prompt: "link or file path")
+                    exampleRow(appearance.noteTemplateExample)
                     Text("The date goes in like this: {YYYY-MM-DD}. Link: scheme://…, for example bear://x-callback-url/open-note?title={YYYY-MM-DD} (the note must already exist). File: a path starting with / or ~, for example ~/Notes/Daily/{YYYY-MM-DD}.md (if the file doesn't exist, it is created empty and opened in the default app).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -311,6 +372,96 @@ struct SettingsView: View {
         // Высота по содержимому, но не больше 200 pt: дальше включается прокрутка, и окно не растёт.
         .frame(height: rangeListContentHeight > 0 ? min(rangeListContentHeight, 200) : 200)
         .background(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+    }
+
+    /// Строка ползунка в одну линию: название → значение (у ширины поле и счётчик) → ползунок постоянной длины.
+    /// Колонки названия и значения одной ширины у всех строк, поэтому все ползунки стоят в одну колонку.
+    @ViewBuilder
+    private func sliderRow<Display: View>(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
+                                          step: Double? = nil, @ViewBuilder display: () -> Display) -> some View {
+        HStack(spacing: 8) {
+            Text(title).frame(width: 96, alignment: .leading)
+            display().frame(width: 120, alignment: .leading)
+            // Без подписи: форма иначе ставит ползунок со своей подписью справа и сама задаёт ему узкую ширину.
+            Group {
+                if let step {
+                    Slider(value: value, in: range, step: step) { EmptyView() }
+                } else {
+                    Slider(value: value, in: range) { EmptyView() }
+                }
+            }
+            .labelsHidden()
+            .frame(width: Self.sliderWidth, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Строка ползунка со значением обычным текстом («13 pt»).
+    private func sliderRow(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
+                           step: Double? = nil, shows text: String) -> some View {
+        sliderRow(title, value: value, in: range, step: step) {
+            Text(text).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Длина всех ползунков, pt.
+    private static let sliderWidth = 260.0
+
+    /// Пример результата: мелкий серый текст, как у примеров в Date Format. Подпись в той же колонке, что у полей.
+    private func exampleRow(_ example: String) -> some View {
+        HStack(spacing: 8) {
+            Text("Example").frame(width: 90, alignment: .leading)
+            Text(example)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Поле заметочника: подпись слева, поле с рамкой и серой подсказкой внутри (видно, что сюда можно вводить).
+    private func noteField(_ title: String, text: Binding<String>, prompt: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title).frame(width: 90, alignment: .leading)
+            TextField("", text: text, prompt: Text(prompt))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    /// Строка цвета: подпись и образец по центру одной линии (в LabeledContent подпись стояла выше образца).
+    private func colorRow(_ title: String, selection: Binding<Color>) -> some View {
+        HStack(alignment: .center) {
+            Text(title)
+            Spacer()
+            ColorPicker("", selection: selection, supportsOpacity: false)
+                .labelsHidden()
+        }
+    }
+
+    /// Ширина окна: введённое вручную значение зажимается в допустимые границы.
+    private var widthBinding: Binding<Double> {
+        Binding(
+            get: { appearance.width },
+            set: { appearance.width = min(max($0, Appearance.widthRange.lowerBound), Appearance.widthRange.upperBound) })
+    }
+
+    /// Линия «сегодня»: цвет без прозрачности и отдельная прозрачность. Пока ничего не выбрано, это цвет текста с 15%.
+    private var highlightAlpha: Double { Double(NSColor(appearance.highlightColor).alphaComponent) }
+
+    private var highlightColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(appearance.highlightColor).withAlphaComponent(1)) },
+            set: { appearance.highlight = Color(nsColor: NSColor($0).withAlphaComponent(CGFloat(highlightAlpha))) })
+    }
+
+    private var highlightOpacityBinding: Binding<Double> {
+        Binding(
+            get: { highlightAlpha },
+            set: {
+                appearance.highlight = Color(nsColor: NSColor(appearance.highlightColor).withAlphaComponent(CGFloat($0)))
+            })
     }
 
     /// Диапазоны по дате начала (при равном начале сначала короткий); прошедшие остаются на своём месте.

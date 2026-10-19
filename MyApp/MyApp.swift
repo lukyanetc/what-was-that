@@ -40,12 +40,13 @@ private struct MenuContent: View {
         Button("Settings…") {
             openWindow(id: "settings")
             NSApp.activate()
-            // Окно настроек (обычное, не лента) поверх остальных окон. Оно появляется не мгновенно, поэтому с паузой.
+            // При вызове окно настроек выходит поверх остальных, а дальше ведёт себя как обычное окно (уровень не меняется).
+            // Оно появляется не мгновенно, поэтому с паузой.
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
                 for window in NSApp.windows where window.title == "d-cal - settings" {
-                    window.level = .floating
                     window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
                 }
             }
         }

@@ -73,6 +73,10 @@ final class DesktopWindow: NSWindow {
     var periodFits: Bool { periodContentHeight <= appearance.periodRoom(screenHeight: screenFrame.height) }
     /// Окно по размеру содержимого (месяц, неделя), а не на весь экран. Период, как и лента, на весь экран.
     var isCompact: Bool { appearance.viewKind.isPaged }
+    /// Высота затухания у верхнего и нижнего края. Настройка действует только в окне на весь экран (Feed, Range).
+    /// В месяце и неделе окно по размеру содержимого: затухание там постоянное, иначе настройка двигала бы окно и текст.
+    var edgeFade: Double { isCompact ? Self.compactEdgeFade : appearance.edgeFade }
+    private static let compactEdgeFade = 24.0
     /// Отступ первого дня периода от верха окна (хранится в настройках внешнего вида).
     var periodOffset: Double {
         get { appearance.periodOffset }
