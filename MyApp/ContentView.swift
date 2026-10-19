@@ -644,13 +644,17 @@ struct ContentView: View {
     /// Ширина места под стрелку заметки в конце строки.
     private static let noteArrowWidth = 20.0
 
-    /// Косая стрелка в конце строки. Нет ссылки: в scroll и edit бледная кнопка, по нажатию заметка связывается с днём.
-    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в solid клики проходят сквозь окно).
+    /// Косая стрелка в конце строки. Нет ссылки: бледная кнопка только в edit, по нажатию заметка связывается с днём.
+    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в solid клики проходят сквозь окно);
+    /// убрать ссылку можно только в edit.
     @ViewBuilder private func noteArrow(_ day: Date) -> some View {
         let key = DayStore.key(for: day)
         let hasNote = entries[key]?.note != nil
-        let isActive = desktop.mode == .scroll || desktop.mode == .edit
-        if hasNote || isActive {
+        let isEdit = desktop.mode == .edit
+        let isActive = hasNote ? (desktop.mode == .scroll || isEdit) : isEdit
+        // Кнопка есть в строке всегда, а в нужных режимах только проявляется: если вставлять её при входе в edit,
+        // в каждой видимой строке появляется новый вид в тот же момент, когда меняются поля ввода (гипотеза мигания).
+        Group {
             Button { openOrLinkNote(day) } label: {
                 Image(systemName: "arrow.up.right")
                     .font(desktop.appearance.smallFont)
@@ -658,11 +662,11 @@ struct ContentView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .opacity(hasNote ? 0.6 : 0.2)
+            .opacity(hasNote ? 0.6 : (isEdit ? 0.2 : 0))
             .padding(.top, desktop.appearance.rowPadding)
             .allowsHitTesting(isActive)
             .contextMenu {
-                if hasNote { Button("Убрать ссылку на заметку") { setNote(nil, for: day) } }
+                if hasNote && isEdit { Button("Убрать ссылку на заметку") { setNote(nil, for: day) } }
             }
         }
     }

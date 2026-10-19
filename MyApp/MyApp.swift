@@ -34,6 +34,10 @@ private struct MenuContent: View {
                 }
             }
         }
+        Menu("Экспорт данных") {
+            Button("JSON…") { Export.save(markdown: false) }
+            Button("Markdown…") { Export.save(markdown: true) }
+        }
         Button("Выход") { NSApp.terminate(nil) }
     }
 }

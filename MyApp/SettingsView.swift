@@ -73,7 +73,7 @@ struct SettingsView: View {
                     LabeledContent("Пример") {
                         Text(MomentFormat.string(from: .now, pattern: appearance.obsidianFileFormat))
                     }
-                    Text("Стрелка в конце строки (в scroll и edit) создаёт заметку дня в Obsidian, если её нет, и открывает её. Дальше она открывает эту же заметку.")
+                    Text("Стрелка в конце строки в edit создаёт заметку дня в Obsidian (если её нет) и открывает её. Дальше стрелка открывает эту же заметку в scroll и edit.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .appleNotes:
@@ -82,7 +82,7 @@ struct SettingsView: View {
                     LabeledContent("Пример") {
                         Text(MomentFormat.string(from: .now, pattern: appearance.appleNotesFormat))
                     }
-                    Text("Стрелка в конце строки (в scroll и edit) создаёт заметку дня в Notes, если её нет, и открывает её. При первом разе macOS спросит разрешение на управление Notes.")
+                    Text("Стрелка в конце строки в edit создаёт заметку дня в Notes (если её нет) и открывает её. Дальше стрелка открывает эту же заметку в scroll и edit. При первом разе macOS спросит разрешение на управление Notes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .manual:

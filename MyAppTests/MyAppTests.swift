@@ -56,6 +56,40 @@ struct DayStoreTests {
     }
 }
 
+struct ExportTests {
+    private func day(_ month: Int, _ day: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day))!
+    }
+
+    @Test func daysRunFromFirstEntryToTodayIncludingEmpty() {
+        let entries = ["2026-03-10": DayEntry(text: "a"), "2026-03-12": DayEntry(text: "b")]
+        #expect(Export.days(entries, today: day(3, 11)) == ["2026-03-10", "2026-03-11", "2026-03-12"])
+        #expect(Export.days(entries, today: day(3, 14)).last == "2026-03-14")
+        #expect(Export.days([:], today: day(3, 14)).isEmpty)
+    }
+
+    @Test func markdownListsEmptyDaysAndIndentsLines() {
+        let entries = ["2026-03-10": DayEntry(text: "Ремонт\nвторая", note: "https://example.com/n"),
+                       "2026-03-12": DayEntry(text: "b", note: AppleNotes.prefix + "x-coredata://1")]
+        #expect(Export.markdown(entries, today: day(3, 11)) == """
+            - 2026-03-10 — Ремонт
+              вторая [заметка](https://example.com/n)
+            - 2026-03-11
+            - 2026-03-12 — b
+
+            """)
+    }
+
+    @Test func jsonHasEveryDayAndLoadsBack() throws {
+        let entries = ["2026-03-10": DayEntry(text: "a", color: 2), "2026-03-12": DayEntry(text: "b")]
+        let data = try Export.json(entries, today: day(3, 11))
+        let decoded = try JSONDecoder().decode([String: DayEntry].self, from: data)
+        #expect(decoded.keys.sorted() == ["2026-03-10", "2026-03-11", "2026-03-12"])
+        #expect(decoded["2026-03-11"] == DayEntry(text: ""))
+        #expect(decoded["2026-03-10"] == entries["2026-03-10"])
+    }
+}
+
 struct PeriodTests {
     private func day(_ month: Int, _ day: Int) -> Date {
         Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day))!
