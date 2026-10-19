@@ -489,7 +489,7 @@ enum Wallpaper {
     }
 }
 
-private extension Color {
+extension Color {
     /// RRGGBB или RRGGBBAA.
     init?(hex: String) {
         guard hex.count == 6 || hex.count == 8, var value = UInt32(hex, radix: 16) else { return nil }

@@ -82,6 +82,8 @@ final class DesktopWindow: NSWindow {
     @ObservationIgnored var moveFocus: ((Int) -> Void)?
     /// Листает месяц или неделю на соседний отрезок (+1 вперёд, -1 назад); выставляет лента.
     @ObservationIgnored var shiftPeriod: ((Int) -> Void)?
+    /// Записывает несохранённый текст в файл (при выходе из приложения); выставляет лента.
+    @ObservationIgnored var flushPending: (() -> Void)?
     /// Колесо и жесты в scroll: накопленная прокрутка текущего жеста и признак, что он уже перелистнул отрезок.
     @ObservationIgnored private var scrollAccum = 0.0
     @ObservationIgnored private var scrollLocked = false

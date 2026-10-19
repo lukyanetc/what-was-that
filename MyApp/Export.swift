@@ -1,6 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    /// Файл данных теперь лежит в другой папке: лента перечитывает его.
+    static let dataFolderChanged = Notification.Name("dcal.dataFolderChanged")
+}
+
 /// Экспорт дневника в JSON или Markdown: все дни от первой записи, пустые тоже.
 enum Export {
     /// День по ключу "yyyy-MM-dd".
@@ -64,6 +69,37 @@ enum Export {
         } catch {
             alert("Не удалось сохранить файл", error.localizedDescription)
         }
+    }
+
+    /// Выбор папки для файла данных (например, в iCloud Drive). Текущий файл копируется туда, а старый остаётся на месте.
+    /// Если в выбранной папке уже лежит d-cal.json, берётся он.
+    static func chooseDataFolder() {
+        NSApp.activate()
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.message = "Папка для файла d-cal.json (например, в iCloud Drive)"
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        let current = DayStore.defaultURL
+        let target = folder.appending(path: "d-cal.json")
+        guard target.standardizedFileURL != current.standardizedFileURL else { return }
+        let manager = FileManager.default
+        if manager.fileExists(atPath: target.path(percentEncoded: false)) {
+            let alert = NSAlert()
+            alert.messageText = "В этой папке уже есть d-cal.json"
+            alert.informativeText = "Приложение будет работать с ним. Текущий файл останется на прежнем месте."
+            alert.addButton(withTitle: "Использовать")
+            alert.addButton(withTitle: "Отмена")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        } else if manager.fileExists(atPath: current.path(percentEncoded: false)) {
+            do { try manager.copyItem(at: current, to: target) } catch {
+                alert("Не удалось скопировать файл", error.localizedDescription)
+                return
+            }
+        }
+        UserDefaults.standard.set(folder.path(percentEncoded: false), forKey: "dataFolder")
+        NotificationCenter.default.post(name: .dataFolderChanged, object: nil)
     }
 
     private static func alert(_ title: String, _ text: String) {

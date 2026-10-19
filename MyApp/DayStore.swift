@@ -13,7 +13,25 @@ struct DayEntry: Codable, Equatable {
 
 /// Дневник в одном JSON-файле: дата ("2026-03-10") → запись.
 struct DayStore {
-    var url = URL.documentsDirectory.appending(path: "d-cal.json")
+    var url = DayStore.defaultURL
+
+    /// Файл данных: в папке, выбранной пользователем (например, в iCloud Drive), иначе в «Документах».
+    static var defaultURL: URL {
+        let folder = UserDefaults.standard.string(forKey: "dataFolder").map { URL(filePath: $0, directoryHint: .isDirectory) }
+        return (folder ?? .documentsDirectory).appending(path: "d-cal.json")
+    }
+
+    /// Короткое описание проблемы с файлом для показа пользователю.
+    static func problemText(for error: Error) -> String {
+        if (error as? CocoaError)?.code == .fileReadNoSuchFile { return "Файл данных скачивается из iCloud" }
+        if error is DecodingError { return "Файл данных повреждён: записи не сохраняются" }
+        return "Не удалось сохранить записи"
+    }
+
+    /// Время изменения файла (нужно, чтобы замечать правки с другого Mac, пришедшие через iCloud).
+    var modificationDate: Date? {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
 
     /// Ключ дня в локальном часовом поясе: "2026-03-10".
     static func key(for date: Date) -> String {
@@ -22,7 +40,17 @@ struct DayStore {
 
     /// Нет файла → пустой дневник. Битый файл → ошибка (чтобы не затереть его при сохранении).
     func load() throws -> [String: DayEntry] {
-        guard FileManager.default.fileExists(atPath: url.path()) else { return [:] }
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: url.path(percentEncoded: false)) else {
+            // iCloud мог выгрузить файл с диска: остался «.d-cal.json.icloud». Пустой дневник тут вернуть нельзя, иначе
+            // следующая запись затёрла бы настоящий файл. Просим систему скачать его и пока считаем это ошибкой.
+            let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
+            if manager.fileExists(atPath: placeholder.path(percentEncoded: false)) {
+                try? manager.startDownloadingUbiquitousItem(at: url)
+                throw CocoaError(.fileReadNoSuchFile)
+            }
+            return [:]
+        }
         return try JSONDecoder().decode([String: DayEntry].self, from: Data(contentsOf: url))
     }
 

@@ -50,6 +50,35 @@ struct DayStoreTests {
         #expect(try store.load().isEmpty)
     }
 
+    @Test func evictedICloudFileThrowsInsteadOfBeingOverwritten() throws {
+        let store = makeStore()
+        let placeholder = store.url.deletingLastPathComponent().appending(path: ".\(store.url.lastPathComponent).icloud")
+        try Data().write(to: placeholder)
+        defer { try? FileManager.default.removeItem(at: placeholder) }
+        #expect(throws: (any Error).self) { try store.load() }
+        #expect(throws: (any Error).self) { try store.set("текст", for: "2026-03-10") }
+        #expect(!FileManager.default.fileExists(atPath: store.url.path(percentEncoded: false)))
+    }
+
+    @Test func problemTextTellsCorruptFromEvictedFromWriteError() throws {
+        let store = makeStore()
+        try Data("не json".utf8).write(to: store.url)
+        defer { try? FileManager.default.removeItem(at: store.url) }
+        do { _ = try store.load() } catch { #expect(DayStore.problemText(for: error).contains("повреждён")) }
+        #expect(DayStore.problemText(for: CocoaError(.fileReadNoSuchFile)).contains("iCloud"))
+        #expect(DayStore.problemText(for: CocoaError(.fileWriteNoPermission)).contains("Не удалось"))
+    }
+
+    @Test func pathWithSpacesIsFound() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "d cal \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = DayStore(url: folder.appending(path: "d-cal.json"))
+        try store.set("текст", for: "2026-03-10")
+        #expect(try store.load()["2026-03-10"]?.text == "текст")
+        #expect(store.modificationDate != nil)
+    }
+
     @Test func keyUsesLocalDay() {
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 23, minute: 30))!
         #expect(DayStore.key(for: date) == "2026-03-10")
@@ -87,6 +116,28 @@ struct ExportTests {
         #expect(decoded.keys.sorted() == ["2026-03-10", "2026-03-11", "2026-03-12"])
         #expect(decoded["2026-03-11"] == DayEntry(text: ""))
         #expect(decoded["2026-03-10"] == entries["2026-03-10"])
+    }
+}
+
+struct SettingsFileTests {
+    @Test func partialFileDecodesAndIgnoresUnknownKeys() throws {
+        let json = Data(#"{"fontSize": 15, "uppercase": false, "future": 1}"#.utf8)
+        let file = try JSONDecoder().decode(SettingsFile.self, from: json)
+        #expect(file.fontSize == 15)
+        #expect(file.uppercase == false)
+        #expect(file.width == nil)
+        #expect(file.periods == nil)
+    }
+
+    @Test func periodsSurviveRoundTrip() throws {
+        let start = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 1))!
+        let period = Period(name: "Ремонт", start: start, end: start.addingTimeInterval(86400 * 9))
+        let data = try JSONEncoder().encode(SettingsFile(periods: [period]))
+        #expect(try JSONDecoder().decode(SettingsFile.self, from: data).periods == [period])
+    }
+
+    @Test func notAJsonObjectThrows() {
+        #expect(throws: (any Error).self) { try JSONDecoder().decode(SettingsFile.self, from: Data("не json".utf8)) }
     }
 }
 

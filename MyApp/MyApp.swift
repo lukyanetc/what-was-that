@@ -6,6 +6,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         desktop.start()
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        desktop.flushPending?()
+    }
 }
 
 private struct MenuContent: View {
@@ -37,6 +41,12 @@ private struct MenuContent: View {
         Menu("Экспорт данных") {
             Button("JSON…") { Export.save(markdown: false) }
             Button("Markdown…") { Export.save(markdown: true) }
+        }
+        Button("Папка данных…") { Export.chooseDataFolder() }
+        Button("Показать файл данных в Finder") { NSWorkspace.shared.activateFileViewerSelecting([DayStore.defaultURL]) }
+        Menu("Настройки: файл") {
+            Button("Экспорт настроек…") { desktop.appearance.exportSettings() }
+            Button("Импорт настроек…") { desktop.appearance.importSettings() }
         }
         Button("Выход") { NSApp.terminate(nil) }
     }
