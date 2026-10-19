@@ -117,9 +117,17 @@ struct ContentView: View {
                 rebuildDays(proxy)
             }
             .onChange(of: periodOffset) { rebuildDays(proxy) }
+            // Настройки календаря: режим, выбранные календари, выданный доступ.
+            .onChange(of: desktop.appearance.eventsMode) { loadEvents() }
+            .onChange(of: desktop.appearance.eventCalendarIDs) { loadEvents() }
+            .onChange(of: desktop.events.isAuthorized) { loadEvents() }
             // Сменился идущий период (правка списка, начало или конец) или его место в окне: лента встаёт заново.
             .onChange(of: activePeriodStart) { restorePosition(proxy) }
-            .onChange(of: periodItemHeight) { restorePosition(proxy) }
+            // Высота первого дня меняется и при входе в edit (поле вместо текста, события): ленту двигать нельзя,
+            // иначе она сдвигается на пункт-два. Подгонка нужна только там, где лента стоит по якорю периода.
+            .onChange(of: periodItemHeight) {
+                if desktop.mode == .solid || desktop.mode == .move { restorePosition(proxy) }
+            }
             .onChange(of: desktop.periodOffset) { restorePosition(proxy) }
             // После смены ширины лента возвращается на место: в solid к сегодняшнему дню, в остальных режимах
             // к верхнему из видимых дней.
@@ -503,6 +511,8 @@ struct ContentView: View {
                 .frame(width: desktop.appearance.dateColumnWidth, alignment: .leading)
             // Место под индикатор (сам он рисуется поверх, см. `indicator`), между датой и записью.
             Color.clear.frame(width: Self.dotWidth, height: 0)
+            // Запись дня, под ней события календаря столбиком (сначала на весь день, дальше по времени).
+            VStack(alignment: .leading, spacing: 0) {
             // Пока раскрыт выбор цвета, запись скрыта: ряд цветов открывается вдоль линии ввода, на её месте.
             Group {
                 // Пока раскрыт выбор цвета, поля ввода нет вовсе: даже скрытое, оно заставляет курсор мыши
@@ -514,19 +524,22 @@ struct ContentView: View {
                     // и в Text мог бы отличаться: тогда текст показывает само поле.
                     let text = entries[key]?.text ?? ""
                     let overlaysText = fitsInColumn(text)
-                    ZStack(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
-                        // Несколько строк в дне (Shift+Enter): запись переносится и растёт вниз.
-                        TextField("", text: binding(for: key), axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .lineLimit(1...20)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(overlaysText ? Color.clear : desktop.appearance.textColor)
-                            .opacity(desktop.appearance.textOpacity)
-                            .focused($focusedDay, equals: day)
-                        if overlaysText {
-                            recordText(AttributedString(text))
-                                .allowsHitTesting(false)
-                        }
+                    // Несколько строк в дне (Shift+Enter): запись переносится и растёт вниз.
+                    let field = TextField("", text: binding(for: key), axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...20)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(overlaysText ? Color.clear : desktop.appearance.textColor)
+                        .opacity(desktop.appearance.textOpacity)
+                        .focused($focusedDay, equals: day)
+                    if overlaysText {
+                        // Высоту строки задаёт тот же Text, что и в solid, а поле лежит поверх и на размер не влияет:
+                        // поле чуть выше текста, и строки ленты (вместе с событиями под ними) сдвигались при входе в edit.
+                        recordText(AttributedString(text))
+                            .allowsHitTesting(false)
+                            .overlay(alignment: .topLeading) { field }
+                    } else {
+                        field
                     }
                 } else {
                     let text = entries[key]?.text ?? ""
@@ -535,6 +548,17 @@ struct ContentView: View {
             }
             .onGeometryChange(for: Double.self) { $0.size.width } action: { recordWidth = $0 }
             .opacity(pickerDay == day ? 0 : 1)
+            .overlay(alignment: .topTrailing) {
+                // Режим «только будущие»: сколько прошедших событий скрыто.
+                let hidden = desktop.events.events(on: day, mode: desktop.appearance.eventsMode).hidden
+                if hidden > 0 {
+                    Text("+\(hidden)").font(desktop.appearance.smallFont).opacity(Self.mutedOpacity).allowsHitTesting(false)
+                }
+            }
+            eventLines(day)
+            }
+            // Место под стрелку заметки в конце строки (сама стрелка рисуется поверх, см. `noteArrow`).
+            Color.clear.frame(width: Self.noteArrowWidth, height: 0)
         }
         // Названия периодов, начинающихся в этот день: слева от линий, в отдельной колонке (название → линия → даты).
         // Под строкой, а не поверх: слой над полем ввода в edit заставлял ленту дребезжать.
@@ -554,6 +578,7 @@ struct ContentView: View {
         }
         .padding(.vertical, desktop.appearance.rowPadding)
         .overlay(alignment: .topLeading) { indicator(for: day) }
+        .overlay(alignment: .topTrailing) { noteArrow(day) }
         .overlay(alignment: .topLeading) {
             if pickerDay == day {
                 // Ряд цветов стоит на уровне первой строки записи, как и сам индикатор.
@@ -570,6 +595,31 @@ struct ContentView: View {
         .background {
             if day == today { todayHighlight }
         }
+    }
+
+    /// События календаря дня столбиком: время и название (у событий на весь день только название).
+    @ViewBuilder private func eventLines(_ day: Date) -> some View {
+        let shown = desktop.events.events(on: day, mode: desktop.appearance.eventsMode).shown
+        ForEach(shown) { event in
+            let startsToday = !event.isAllDay && Self.calendar.startOfDay(for: event.start) == day
+            // Вид записи дня, но мельче и светлее, чтобы не перевешивать её; событие отличает кружок цвета календаря.
+            HStack(alignment: .top, spacing: Self.dotGap + 2) {
+                Circle()
+                    .fill(event.color)
+                    .frame(width: Self.eventDot, height: Self.eventDot)
+                    .padding(.top, desktop.appearance.smallCapCenter - Self.eventDot / 2)
+                recordText(AttributedString(startsToday ? "\(event.start.formatted(.dateTime.hour().minute())) \(event.title)" : event.title))
+                    .font(desktop.appearance.smallFont)
+            }
+            .opacity(Self.eventOpacity)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Загружает события календаря за дни ленты (в режиме «Не показывать» ничего не читается).
+    private func loadEvents() {
+        let ids = desktop.appearance.eventsMode == .hide ? [] : desktop.appearance.eventCalendarIDs
+        desktop.events.load(days: days, calendarIDs: ids)
     }
 
     /// Запись в ленте (solid, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
@@ -591,6 +641,77 @@ struct ContentView: View {
     private static let markerHeightFactor = 0.8
     /// Высота планки одиночного дня; ряд выбора цвета состоит из таких же планок.
     private var markerHeight: Double { desktop.appearance.lineHeight * Self.markerHeightFactor }
+    /// Ширина места под стрелку заметки в конце строки.
+    private static let noteArrowWidth = 20.0
+
+    /// Косая стрелка в конце строки. Нет ссылки: в scroll и edit бледная кнопка, по нажатию заметка связывается с днём.
+    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в solid клики проходят сквозь окно).
+    @ViewBuilder private func noteArrow(_ day: Date) -> some View {
+        let key = DayStore.key(for: day)
+        let hasNote = entries[key]?.note != nil
+        let isActive = desktop.mode == .scroll || desktop.mode == .edit
+        if hasNote || isActive {
+            Button { openOrLinkNote(day) } label: {
+                Image(systemName: "arrow.up.right")
+                    .font(desktop.appearance.smallFont)
+                    .frame(width: Self.noteArrowWidth, height: desktop.appearance.lineHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hasNote ? 0.6 : 0.2)
+            .padding(.top, desktop.appearance.rowPadding)
+            .allowsHitTesting(isActive)
+            .contextMenu {
+                if hasNote { Button("Убрать ссылку на заметку") { setNote(nil, for: day) } }
+            }
+        }
+    }
+
+    /// Есть ссылка — открывает заметку. Нет — связывает день с заметкой: Obsidian и Apple Notes создают заметку дня
+    /// (если её нет) и открывают её.
+    private func openOrLinkNote(_ day: Date) {
+        if let link = entries[DayStore.key(for: day)]?.note {
+            if link.hasPrefix(AppleNotes.prefix) {
+                Task { await AppleNotes.show(id: String(link.dropFirst(AppleNotes.prefix.count))) }
+            } else if let url = URL(string: link) {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+        switch desktop.appearance.noteApp {
+        case .obsidian, .manual:
+            guard let urls = desktop.appearance.noteTargets(for: day) else { NSSound.beep(); return }
+            // Для пути к файлу: создаёт файл, если его нет (для ссылок ничего не делает).
+            desktop.appearance.createNoteFileIfNeeded(urls.open)
+            setNote(urls.open.absoluteString, for: day)
+            NSWorkspace.shared.open(urls.create ?? urls.open)
+        case .appleNotes:
+            let name = MomentFormat.string(from: day, pattern: desktop.appearance.appleNotesFormat)
+            let folder = desktop.appearance.appleNotesFolder
+            Task {
+                // Notes создаёт заметку дня (если её нет) и открывает её; id заметки запоминается в записи дня.
+                guard let id = await AppleNotes.openOrCreate(name: name, folder: folder), !id.isEmpty else {
+                    NSSound.beep()
+                    return
+                }
+                setNote(AppleNotes.prefix + id, for: day)
+            }
+        }
+    }
+
+    /// Сохраняет ссылку на заметку дня сразу в файл (nil убирает её).
+    private func setNote(_ note: String?, for day: Date) {
+        let key = DayStore.key(for: day)
+        var entry = entries[key] ?? DayEntry(text: "")
+        entry.note = note
+        entries[key] = entry.isEmpty ? nil : entry
+        try? DayStore().setNote(note, for: key)
+    }
+
+    /// Диаметр кружка календаря перед событием.
+    private static let eventDot = 5.0
+    /// Прозрачность события относительно записи дня.
+    private static let eventOpacity = 0.65
     /// Промежуток между колонкой даты, индикатором и записью.
     private static let dotGap = 4.0
     /// Левый край индикатора: сразу за колонкой даты, перед записью.
@@ -668,7 +789,7 @@ struct ContentView: View {
         let key = DayStore.key(for: day)
         var entry = entries[key] ?? DayEntry(text: "")
         entry.color = index
-        entries[key] = entry.text.isEmpty && entry.color == nil ? nil : entry
+        entries[key] = entry.isEmpty ? nil : entry
         try? DayStore().setColor(index, for: key)
         closePicker(for: day)
     }
@@ -727,7 +848,7 @@ struct ContentView: View {
             set: {
                 var entry = entries[key] ?? DayEntry(text: "")
                 entry.text = $0
-                entries[key] = entry.text.isEmpty && entry.color == nil ? nil : entry
+                entries[key] = entry.isEmpty ? nil : entry
                 dirty.insert(key)
                 // Пишем сразу, а не при выходе: так текст не теряется при выходе из приложения или сбое.
                 save(key)
@@ -783,6 +904,7 @@ struct ContentView: View {
         // Начало ленты зависит от самой ранней записи; меняем массив, только если границы сдвинулись.
         let newDays = buildDays()
         if newDays != days { days = newDays }
+        loadEvents()
     }
 
     private func buildDays() -> [Date] {
@@ -794,6 +916,7 @@ struct ContentView: View {
     /// Набор дней сменился: курсор edit и видимый диапазон относились к прежнему набору.
     private func rebuildDays(_ proxy: ScrollViewProxy) {
         days = buildDays()
+        loadEvents()
         visibleRange = 0...0
         editingDay = pendingEdge.map { $0 > 0 ? days.first : days.last } ?? nil
         pendingEdge = nil

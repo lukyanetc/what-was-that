@@ -4,6 +4,11 @@ struct DayEntry: Codable, Equatable {
     var text: String
     /// Цвет круглого индикатора в начале строки: номер в `Appearance.indicatorColors`. Соседние дни одного цвета сливаются в период.
     var color: Int?
+    /// Ссылка на заметку дня в заметочнике (Obsidian, Apple Notes): открывается стрелкой в конце строки.
+    var note: String?
+
+    /// Запись без текста, цвета и ссылки в файле не хранится.
+    var isEmpty: Bool { text.isEmpty && color == nil && note == nil }
 }
 
 /// Дневник в одном JSON-файле: дата ("2026-03-10") → запись.
@@ -32,11 +37,16 @@ struct DayStore {
         try update(key) { $0.color = color }
     }
 
+    /// То же для ссылки на заметку (nil убирает её).
+    func setNote(_ note: String?, for key: String) throws {
+        try update(key) { $0.note = note }
+    }
+
     private func update(_ key: String, _ change: (inout DayEntry) -> Void) throws {
         var days = try load()
         var entry = days[key] ?? DayEntry(text: "")
         change(&entry)
-        days[key] = entry.text.isEmpty && entry.color == nil ? nil : entry
+        days[key] = entry.isEmpty ? nil : entry
         try write(days)
     }
 

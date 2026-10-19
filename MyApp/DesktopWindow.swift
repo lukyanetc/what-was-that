@@ -59,6 +59,8 @@ final class DesktopWindow: NSWindow {
         }
     }
     let appearance = Appearance()
+    /// События системного календаря (только чтение).
+    let events = CalendarEvents()
     /// Период, который окно показывает сейчас: режим «Период», пока период идёт, и только в solid и move.
     /// Остальные дни при этом прозрачны; в scroll и edit они проявляются, окно и лента не меняются.
     /// Период, который не помещается в окно, не показывается отдельно: тогда режим «Период» показывает ленту.
@@ -161,6 +163,7 @@ final class DesktopWindow: NSWindow {
             periodOffset = min(max(periodOffset + delta, appearance.edgeFade), max(screenFrame.height - 100, 0))
         }
         apply()
+        events.refreshAuthorization()
 
         // Opt+M: solid → scroll → edit → solid
         hotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: optionKey) { [weak self] in

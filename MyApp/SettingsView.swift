@@ -3,6 +3,10 @@ import SwiftUI
 /// Окно настроек внешнего вида.
 struct SettingsView: View {
     @Bindable var appearance: Appearance
+    let events: CalendarEvents
+
+    /// Подсказки по подключению заметочников лежат в репозитории (docs/NOTES.md).
+    private static let notesGuide = URL(string: "https://github.com/lukyanetc/d-cal/blob/main/docs/NOTES.md")
 
     private static let datePresets = ["DD ddd", "ddd DD", "DD.MM", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     private static let monthPresets = ["MMMM YYYY", "MMMM", "MMM YY", "YYYY-MM"]
@@ -36,6 +40,61 @@ struct SettingsView: View {
                 Text("Режим «Период» показывает только дни самого длинного из идущих отрезков, короткие видны внутри него. В «Месяце» и «Неделе» отрезков нет, в «Ленте» их можно отключить.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            Section("Календарь") {
+                Picker("События", selection: $appearance.eventsMode) {
+                    ForEach(EventsMode.allCases, id: \.self) { Text($0.title) }
+                }
+                if events.isAuthorized {
+                    ForEach(events.calendars, id: \.id) { calendar in
+                        Toggle("\(calendar.title) (\(calendar.source))", isOn: Binding(
+                            get: { appearance.eventCalendarIDs.contains(calendar.id) },
+                            set: { isOn in
+                                if isOn { appearance.eventCalendarIDs.insert(calendar.id) }
+                                else { appearance.eventCalendarIDs.remove(calendar.id) }
+                            }))
+                    }
+                } else {
+                    Button("Разрешить доступ к календарю") { Task { await events.requestAccess() } }
+                }
+                Text("Только чтение. Google Calendar виден здесь, если аккаунт добавлен в системные настройки (Учётные записи интернета).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Заметки") {
+                Picker("Заметочник", selection: $appearance.noteApp) {
+                    ForEach(NoteApp.allCases, id: \.self) { Text($0.title) }
+                }
+                switch appearance.noteApp {
+                case .obsidian:
+                    TextField("Хранилище (vault)", text: $appearance.obsidianVault)
+                    TextField("Папка (необязательно)", text: $appearance.obsidianFolder)
+                    TextField("Имя файла", text: $appearance.obsidianFileFormat)
+                    LabeledContent("Пример") {
+                        Text(MomentFormat.string(from: .now, pattern: appearance.obsidianFileFormat))
+                    }
+                    Text("Стрелка в конце строки (в scroll и edit) создаёт заметку дня в Obsidian, если её нет, и открывает её. Дальше она открывает эту же заметку.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .appleNotes:
+                    TextField("Папка (необязательно)", text: $appearance.appleNotesFolder)
+                    TextField("Имя заметки", text: $appearance.appleNotesFormat)
+                    LabeledContent("Пример") {
+                        Text(MomentFormat.string(from: .now, pattern: appearance.appleNotesFormat))
+                    }
+                    Text("Стрелка в конце строки (в scroll и edit) создаёт заметку дня в Notes, если её нет, и открывает её. При первом разе macOS спросит разрешение на управление Notes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .manual:
+                    TextField("Шаблон ссылки или пути к файлу", text: $appearance.noteTemplate)
+                    LabeledContent("Пример") { Text(appearance.noteTemplateExample).lineLimit(1).truncationMode(.middle) }
+                    Text("Дата подставляется так: {YYYY-MM-DD}. Ссылка: scheme://…, например bear://x-callback-url/open-note?title={YYYY-MM-DD} (заметка должна уже быть). Файл: путь с / или ~, например ~/Notes/Daily/{YYYY-MM-DD}.md (если файла нет, он создаётся пустым и открывается в приложении по умолчанию).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let guide = Self.notesGuide {
+                    Link("Инструкции для популярных заметочников", destination: guide)
+                }
             }
             Section("Текст") {
                 ColorPicker("Цвет", selection: $appearance.color, supportsOpacity: false)

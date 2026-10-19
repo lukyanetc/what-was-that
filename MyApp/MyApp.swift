@@ -25,6 +25,14 @@ private struct MenuContent: View {
         Button("Настройки…") {
             openWindow(id: "settings")
             NSApp.activate()
+            // Окно настроек (обычное, не лента) поверх остальных окон. Оно появляется не мгновенно, поэтому с паузой.
+            Task {
+                try? await Task.sleep(for: .milliseconds(100))
+                for window in NSApp.windows where window.title == "Настройки" {
+                    window.level = .floating
+                    window.makeKeyAndOrderFront(nil)
+                }
+            }
         }
         Button("Выход") { NSApp.terminate(nil) }
     }
@@ -38,7 +46,7 @@ private struct MenuContent: View {
             MenuContent(desktop: delegate.desktop)
         }
         Window("Настройки", id: "settings") {
-            SettingsView(appearance: delegate.desktop.appearance)
+            SettingsView(appearance: delegate.desktop.appearance, events: delegate.desktop.events)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)

@@ -17,6 +17,19 @@ enum ViewKind: String, CaseIterable {
     var isPaged: Bool { self == .month || self == .week }
 }
 
+/// Заметочник, в котором открывается заметка дня.
+enum NoteApp: String, CaseIterable {
+    case obsidian, appleNotes, manual
+
+    var title: String {
+        switch self {
+        case .obsidian: "Obsidian"
+        case .appleNotes: "Apple Notes"
+        case .manual: "Другой (вручную)"
+        }
+    }
+}
+
 /// Внешний вид: цвет текста (с подстройкой под яркость обоев под лентой), прозрачность, ширина окна,
 /// линия выделения сегодняшнего дня, формат даты и заголовков месяцев. Всё хранится в UserDefaults.
 @Observable final class Appearance {
@@ -147,6 +160,24 @@ enum ViewKind: String, CaseIterable {
     var showsWeekNumber: Bool { didSet { UserDefaults.standard.set(showsWeekNumber, forKey: "showsWeekNumber") } }
     /// Увеличенный отступ перед каждым понедельником.
     var weekGap: Bool { didSet { UserDefaults.standard.set(weekGap, forKey: "weekGap") } }
+    /// Как показывать события календаря и из каких календарей (идентификаторы EventKit).
+    var eventsMode: EventsMode { didSet { UserDefaults.standard.set(eventsMode.rawValue, forKey: "eventsMode") } }
+    var eventCalendarIDs: Set<String> {
+        didSet { UserDefaults.standard.set(Array(eventCalendarIDs), forKey: "eventCalendarIDs") }
+    }
+    /// Заметочник и настройки Obsidian: хранилище, папка и формат имени файла (в духе moment.js).
+    var noteApp: NoteApp { didSet { UserDefaults.standard.set(noteApp.rawValue, forKey: "noteApp") } }
+    var obsidianVault: String { didSet { UserDefaults.standard.set(obsidianVault, forKey: "obsidianVault") } }
+    var obsidianFolder: String { didSet { UserDefaults.standard.set(obsidianFolder, forKey: "obsidianFolder") } }
+    var obsidianFileFormat: String {
+        didSet { UserDefaults.standard.set(obsidianFileFormat, forKey: "obsidianFileFormat") }
+    }
+    /// Apple Notes: папка (пусто — папка по умолчанию) и формат имени заметки дня.
+    var appleNotesFolder: String { didSet { UserDefaults.standard.set(appleNotesFolder, forKey: "appleNotesFolder") } }
+    var appleNotesFormat: String { didSet { UserDefaults.standard.set(appleNotesFormat, forKey: "appleNotesFormat") } }
+    /// «Другой (вручную)»: шаблон ссылки (`scheme://…`) или пути к файлу (`/…`, `~/…`); `{формат даты}` заменяется
+    /// датой дня (как в moment.js).
+    var noteTemplate: String { didSet { UserDefaults.standard.set(noteTemplate, forKey: "noteTemplate") } }
     /// Яркость обоев под лентой, 0 (чёрные) ... 1 (белые).
     private(set) var luminance = 0.2
     /// Удалось ли измерить обои (иначе яркость выводится из тёмной/светлой темы системы).
@@ -199,8 +230,72 @@ enum ViewKind: String, CaseIterable {
         uppercase = defaults.object(forKey: "uppercase") as? Bool ?? true
         showsWeekNumber = defaults.object(forKey: "showsWeekNumber") as? Bool ?? false
         weekGap = defaults.object(forKey: "weekGap") as? Bool ?? false
+        eventsMode = defaults.string(forKey: "eventsMode").flatMap { EventsMode(rawValue: $0) } ?? .hide
+        eventCalendarIDs = Set(defaults.stringArray(forKey: "eventCalendarIDs") ?? [])
+        noteApp = defaults.string(forKey: "noteApp").flatMap { NoteApp(rawValue: $0) } ?? .obsidian
+        obsidianVault = defaults.string(forKey: "obsidianVault") ?? ""
+        obsidianFolder = defaults.string(forKey: "obsidianFolder") ?? ""
+        obsidianFileFormat = defaults.string(forKey: "obsidianFileFormat") ?? "YYYY-MM-DD"
+        appleNotesFolder = defaults.string(forKey: "appleNotesFolder") ?? ""
+        appleNotesFormat = defaults.string(forKey: "appleNotesFormat") ?? "YYYY-MM-DD"
+        noteTemplate = defaults.string(forKey: "noteTemplate") ?? ""
         dateColumnWidth = measureDateColumn()
         updatePeriodMetrics()
+    }
+
+    private static func percentEncoded(_ text: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~/"))
+        return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
+    }
+
+    /// Подставляет в шаблон дату: каждое `{формат}` заменяется днём в этом формате (как в moment.js).
+    private func fill(_ template: String, day: Date, encoded: Bool) -> String {
+        var result = "", rest = Substring(template)
+        while let open = rest.firstIndex(of: "{"), let close = rest[open...].firstIndex(of: "}") {
+            result += rest[..<open]
+            let value = MomentFormat.string(from: day, pattern: String(rest[rest.index(after: open)..<close]))
+            result += encoded ? Self.percentEncoded(value) : value
+            rest = rest[rest.index(after: close)...]
+        }
+        return result + rest
+    }
+
+    /// Адреса заметки дня в выбранном заметочнике: по `open` она открывается, `create` (если есть) сначала создаёт её.
+    /// nil, пока заметочник не настроен. Apple Notes работает через AppleScript и сюда не входит.
+    func noteTargets(for day: Date) -> (create: URL?, open: URL)? {
+        switch noteApp {
+        case .obsidian:
+            guard !obsidianVault.isEmpty else { return nil }
+            let name = MomentFormat.string(from: day, pattern: obsidianFileFormat)
+            let folder = obsidianFolder.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+            let file = folder.isEmpty ? name : "\(folder)/\(name)"
+            let query = "?vault=\(Self.percentEncoded(obsidianVault))&file=\(Self.percentEncoded(file))"
+            // append: если заметка дня уже есть, она не дублируется (поведение без append в документации не описано).
+            guard let create = URL(string: "obsidian://new" + query + "&append=true"),
+                  let open = URL(string: "obsidian://open" + query) else { return nil }
+            return (create, open)
+        case .manual:
+            let template = noteTemplate.trimmingCharacters(in: .whitespaces)
+            if template.hasPrefix("/") || template.hasPrefix("~") {
+                // Путь к файлу: имя подставляется как есть.
+                let path = (fill(template, day: day, encoded: false) as NSString).expandingTildeInPath
+                return (nil, URL(filePath: path))
+            }
+            // Ссылка: значения в `{}` кодируются для адреса.
+            return URL(string: fill(template, day: day, encoded: true)).flatMap { $0.scheme == nil ? nil : (nil, $0) }
+        case .appleNotes:
+            return nil
+        }
+    }
+
+    /// Шаблон на сегодняшнем дне (пример для настроек).
+    var noteTemplateExample: String { noteTargets(for: .now)?.open.absoluteString ?? "" }
+
+    /// «Другой: файл»: создаёт файл заметки дня (и папки), если его ещё нет.
+    func createNoteFileIfNeeded(_ url: URL) {
+        guard url.isFileURL, !FileManager.default.fileExists(atPath: url.path()) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data().write(to: url)
     }
 
     func weekText(_ date: Date) -> String { MomentFormat.string(from: date, pattern: "W") }
@@ -219,6 +314,12 @@ enum ViewKind: String, CaseIterable {
     /// Расстояние от верха строки до визуального центра заглавных букв и цифр.
     var capCenter: Double {
         let font = nsFont(size: fontSize)
+        return font.ascender - font.capHeight / 2
+    }
+
+    /// То же для мелкого шрифта (события календаря).
+    var smallCapCenter: Double {
+        let font = nsFont(size: (fontSize * 10 / 13).rounded())
         return font.ascender - font.capHeight / 2
     }
 
