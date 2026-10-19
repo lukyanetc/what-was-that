@@ -44,7 +44,7 @@ private struct MenuContent: View {
             // Оно появляется не мгновенно, поэтому с паузой.
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
-                for window in NSApp.windows where window.title == "d-cal - settings" {
+                for window in NSApp.windows where window.title == "what was that!? - settings" {
                     window.makeKeyAndOrderFront(nil)
                     window.orderFrontRegardless()
                 }
@@ -59,10 +59,10 @@ private struct MenuContent: View {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
-        MenuBarExtra("D-Cal", systemImage: "calendar") {
+        MenuBarExtra("What Was That!?", systemImage: "calendar") {
             MenuContent(desktop: delegate.desktop)
         }
-        Window("d-cal - settings", id: "settings") {
+        Window("what was that!? - settings", id: "settings") {
             SettingsView(desktop: delegate.desktop)
         }
         .windowResizability(.contentSize)

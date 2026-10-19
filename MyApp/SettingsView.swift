@@ -26,10 +26,10 @@ struct SettingsView: View {
     @State private var draftEnd = Calendar.current.date(byAdding: .day, value: 6, to: Calendar.current.startOfDay(for: .now)) ?? .now
 
     /// Подсказки по подключению заметочников лежат в репозитории (docs/NOTES.md).
-    private static let notesGuide = URL(string: "https://github.com/lukyanetc/d-cal/blob/main/docs/NOTES.md")
+    private static let notesGuide = URL(string: "https://github.com/lukyanetc/what-was-that/blob/main/docs/NOTES.md")
 
     /// Какие обозначения формата даты поддерживаются, лежит в репозитории (docs/DATE_FORMATS.md).
-    private static let formatGuide = URL(string: "https://github.com/lukyanetc/d-cal/blob/main/docs/DATE_FORMATS.md")
+    private static let formatGuide = URL(string: "https://github.com/lukyanetc/what-was-that/blob/main/docs/DATE_FORMATS.md")
 
     private static let datePresets = ["DD ddd", "ddd DD", "DD.MM", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     private static let monthPresets = ["MMMM YYYY", "MMMM", "MMM YY", "YYYY-MM"]
@@ -284,7 +284,7 @@ struct SettingsView: View {
 
     // MARK: About
 
-    private static let repoURL = URL(string: "https://github.com/lukyanetc/d-cal")
+    private static let repoURL = URL(string: "https://github.com/lukyanetc/what-was-that")
 
     /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
     private var aboutTab: some View {
@@ -298,11 +298,11 @@ struct SettingsView: View {
                 .padding(12)
                 // Рисунок чёрными линиями: на белой плашке он читается и в тёмной теме.
                 .background(.white, in: RoundedRectangle(cornerRadius: 16))
-            Text("D-Cal").font(.title2.bold())
+            Text("What Was That!?").font(.title2.bold())
             Text("Version \(version)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("Hi, I'm Maks. I make small, quiet tools for the desktop. D-Cal is a calendar strip that lives on your wallpaper and stays out of the way. More about me soon.")
+            Text("Hi, I'm Maks. I make small, quiet tools for the desktop. What Was That!? is a calendar strip that lives on your wallpaper and stays out of the way. More about me soon.")
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
             VStack(spacing: 6) {

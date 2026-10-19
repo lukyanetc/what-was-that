@@ -101,7 +101,7 @@ extension Appearance {
     func exportSettings() {
         NSApp.activate()
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "d-cal-settings.json"
+        panel.nameFieldStringValue = "what-was-that-settings.json"
         panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
@@ -121,7 +121,7 @@ extension Appearance {
         do {
             try applySettings(Data(contentsOf: url))
         } catch {
-            Self.showAlert("Could not load the settings", "The file doesn't look like D-Cal settings.")
+            Self.showAlert("Could not load the settings", "The file doesn't look like What Was That!? settings.")
         }
     }
 

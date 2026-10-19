@@ -26,7 +26,7 @@ struct CalendarEvent: Identifiable {
 }
 
 /// События системного календаря Mac через EventKit. Google Calendar виден здесь, если аккаунт добавлен в системные настройки.
-/// События не копируются в d-cal.json: они только читаются и показываются.
+/// События не копируются в файл данных: они только читаются и показываются.
 @Observable final class CalendarEvents {
     /// Календари, доступные для выбора (после выдачи доступа).
     private(set) var calendars: [(id: String, title: String, source: String, color: Color)] = []

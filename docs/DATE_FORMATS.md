@@ -1,6 +1,6 @@
 # Date formats
 
-D-Cal formats dates the way [moment.js](https://momentjs.com/docs/#/displaying/format/) does, but date only (no time). Type a pattern into the **Day** or **Month** field in Settings → General → Date Format.
+What Was That!? formats dates the way [moment.js](https://momentjs.com/docs/#/displaying/format/) does, but date only (no time). Type a pattern into the **Day** or **Month** field in Settings → General → Date Format.
 
 - Text in `[square brackets]` is printed as is: `[Day] D` → `Day 10`.
 - Characters that are not tokens (spaces, `.`, `/`, `-`, `,`) are printed as is.

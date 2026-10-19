@@ -165,6 +165,8 @@ final class DesktopWindow: NSWindow {
     var screenFrame: NSRect { (window?.screen ?? NSScreen.main)?.frame ?? .zero }
 
     func start() {
+        // Файл данных переименован вместе с приложением: прежний (d-cal.json) копируется под новым именем.
+        DayStore.migrateLegacyFile(in: DayStore.defaultURL.deletingLastPathComponent())
         let window = DesktopWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         window.isOpaque = false

@@ -5,7 +5,7 @@ import CoreGraphics
 
 struct DayStoreTests {
     private func makeStore() -> DayStore {
-        DayStore(url: FileManager.default.temporaryDirectory.appending(path: "d-cal-\(UUID().uuidString).json"))
+        DayStore(url: FileManager.default.temporaryDirectory.appending(path: "wwt-\(UUID().uuidString).json"))
     }
 
     @Test func missingFileIsEmpty() throws {
@@ -73,10 +73,26 @@ struct DayStoreTests {
         let folder = FileManager.default.temporaryDirectory.appending(path: "d cal \(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let store = DayStore(url: folder.appending(path: "d-cal.json"))
+        let store = DayStore(url: folder.appending(path: DayStore.fileName))
         try store.set("текст", for: "2026-03-10")
         #expect(try store.load()["2026-03-10"]?.text == "текст")
         #expect(store.modificationDate != nil)
+    }
+
+    @Test func legacyFileIsCopiedUnderNewNameOnce() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "wwt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let old = folder.appending(path: "d-cal.json")
+        try DayStore(url: old).set("старая запись", for: "2026-03-10")
+        DayStore.migrateLegacyFile(in: folder)
+        let new = DayStore(url: folder.appending(path: DayStore.fileName))
+        #expect(try new.load()["2026-03-10"]?.text == "старая запись")
+        #expect(FileManager.default.fileExists(atPath: old.path(percentEncoded: false)))
+        // Повторно новый файл не перезаписывается.
+        try new.set("новая запись", for: "2026-03-11")
+        DayStore.migrateLegacyFile(in: folder)
+        #expect(try new.load()["2026-03-11"]?.text == "новая запись")
     }
 
     @Test func keyUsesLocalDay() {

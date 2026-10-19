@@ -60,7 +60,7 @@ enum Export {
             return
         }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = isMarkdown ? "d-cal.md" : "d-cal-export.json"
+        panel.nameFieldStringValue = isMarkdown ? "what-was-that.md" : "what-was-that-export.json"
         panel.allowedContentTypes = [isMarkdown ? UTType(filenameExtension: "md") ?? .plainText : .json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
@@ -72,22 +72,24 @@ enum Export {
     }
 
     /// Выбор папки для файла данных (например, в iCloud Drive). Текущий файл копируется туда, а старый остаётся на месте.
-    /// Если в выбранной папке уже лежит d-cal.json, берётся он.
+    /// Если в выбранной папке уже лежит файл данных, берётся он.
     static func chooseDataFolder() {
         NSApp.activate()
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.message = "Folder for the d-cal.json file (for example, in iCloud Drive)"
+        panel.message = "Folder for the \(DayStore.fileName) file (for example, in iCloud Drive)"
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         let current = DayStore.defaultURL
-        let target = folder.appending(path: "d-cal.json")
+        // Файл под прежним именем в выбранной папке тоже подхватывается.
+        DayStore.migrateLegacyFile(in: folder)
+        let target = folder.appending(path: DayStore.fileName)
         guard target.standardizedFileURL != current.standardizedFileURL else { return }
         let manager = FileManager.default
         if manager.fileExists(atPath: target.path(percentEncoded: false)) {
             let alert = NSAlert()
-            alert.messageText = "This folder already contains d-cal.json"
+            alert.messageText = "This folder already contains \(DayStore.fileName)"
             alert.informativeText = "The app will use it. The current file stays where it is."
             alert.addButton(withTitle: "Use")
             alert.addButton(withTitle: "Cancel")

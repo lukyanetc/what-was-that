@@ -18,7 +18,21 @@ struct DayStore {
     /// Файл данных: в папке, выбранной пользователем (например, в iCloud Drive), иначе в «Документах».
     static var defaultURL: URL {
         let folder = UserDefaults.standard.string(forKey: "dataFolder").map { URL(filePath: $0, directoryHint: .isDirectory) }
-        return (folder ?? .documentsDirectory).appending(path: "d-cal.json")
+        return (folder ?? .documentsDirectory).appending(path: fileName)
+    }
+
+    static let fileName = "what-was-that.json"
+    /// Прежнее имя файла (приложение называлось D-Cal).
+    private static let legacyFileName = "d-cal.json"
+
+    /// Если нового файла в папке нет, а файл под прежним именем есть, он копируется под новым именем.
+    /// Прежний остаётся на месте как копия: удалять его вы можете сами.
+    static func migrateLegacyFile(in folder: URL) {
+        let manager = FileManager.default
+        let new = folder.appending(path: fileName), old = folder.appending(path: legacyFileName)
+        guard !manager.fileExists(atPath: new.path(percentEncoded: false)),
+              manager.fileExists(atPath: old.path(percentEncoded: false)) else { return }
+        try? manager.copyItem(at: old, to: new)
     }
 
     /// Короткое описание проблемы с файлом для показа пользователю.
@@ -42,7 +56,7 @@ struct DayStore {
     func load() throws -> [String: DayEntry] {
         let manager = FileManager.default
         guard manager.fileExists(atPath: url.path(percentEncoded: false)) else {
-            // iCloud мог выгрузить файл с диска: остался «.d-cal.json.icloud». Пустой дневник тут вернуть нельзя, иначе
+            // iCloud мог выгрузить файл с диска: остался «.what-was-that.json.icloud». Пустой дневник тут вернуть нельзя, иначе
             // следующая запись затёрла бы настоящий файл. Просим систему скачать его и пока считаем это ошибкой.
             let placeholder = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).icloud")
             if manager.fileExists(atPath: placeholder.path(percentEncoded: false)) {
