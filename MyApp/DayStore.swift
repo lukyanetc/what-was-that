@@ -23,9 +23,9 @@ struct DayStore {
 
     /// Короткое описание проблемы с файлом для показа пользователю.
     static func problemText(for error: Error) -> String {
-        if (error as? CocoaError)?.code == .fileReadNoSuchFile { return "Файл данных скачивается из iCloud" }
-        if error is DecodingError { return "Файл данных повреждён: записи не сохраняются" }
-        return "Не удалось сохранить записи"
+        if (error as? CocoaError)?.code == .fileReadNoSuchFile { return "Data file is downloading from iCloud" }
+        if error is DecodingError { return "Data file is corrupted: entries are not saved" }
+        return "Could not save entries"
     }
 
     /// Время изменения файла (нужно, чтобы замечать правки с другого Mac, пришедшие через iCloud).

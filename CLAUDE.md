@@ -14,7 +14,7 @@
 
 ## Не ломать (проверено на Mac пользователя)
 
-- Окно только на уровне обоев: solid — `desktopWindow + 1` (под значками), scroll/edit/move — `desktopIconWindow + 1`. Никогда `.floating`, `.statusBar`, `.screenSaver`. В solid `ignoresMouseEvents = true`.
+- Окно только на уровне обоев: locked — `desktopWindow + 1` (под значками), scroll/edit/move — `desktopIconWindow + 1`. Никогда `.floating`, `.statusBar`, `.screenSaver`. В locked `ignoresMouseEvents = true`.
 - Режим accessory: ни Dock, ни Cmd-Tab, ни Mission Control.
 - `collectionBehavior`: `.canJoinAllSpaces`, `.stationary`, `.ignoresCycle`, `.fullScreenAuxiliary`.
 - Фокус: `NSApp.deactivate()` ненадёжен. Фокус возвращается явно приложению `lastExternalApp`. Окно переоткрывается только как крайняя мера после пяти неудачных попыток (`refreshCaret`). Фокус на поле ставится после появления полей и после того, как окно стало key.
@@ -26,9 +26,9 @@
 
 Окно и режимы
 - [x] Окно на уровне обоев, на всех Spaces, на всю высоту экрана
-- [x] Режимы solid / scroll / edit / move
-- [x] Opt+M (solid → scroll → edit → solid), Esc в solid
-- [x] Индикатор режима в правом верхнем углу (`solid` гаснет через секунду)
+- [x] Режимы locked / scroll / edit / move
+- [x] Opt+M (locked → scroll → edit → locked), Esc в locked
+- [x] Индикатор режима в правом верхнем углу (`locked` гаснет через секунду)
 - [x] Значок в строке меню: режим, вид, «Переместить окно», «Настройки…», «Выход»
 - [x] Move: перетаскивание окна (лента по горизонтали, месяц и неделя в любое место), положение запоминается
 - [x] Ширина окна подгоняется сразу и остаётся целиком на экране

@@ -27,7 +27,7 @@ struct ContentView: View {
     /// Сегодняшний день и лента вокруг него; обновляются при смене даты.
     @State private var today = Calendar.current.startOfDay(for: .now)
     @State private var days = ContentView.days(around: Calendar.current.startOfDay(for: .now))
-    /// Месяц и неделя: на сколько отрезков окно сдвинуто от текущего (листание в scroll и edit; в solid всегда 0).
+    /// Месяц и неделя: на сколько отрезков окно сдвинуто от текущего (листание в scroll и edit; в locked всегда 0).
     @State private var periodOffset = 0
     /// Курсор ушёл за край отрезка стрелкой или Enter: +1 — встанет на первый день следующего, -1 — на последний предыдущего.
     @State private var pendingEdge: Int?
@@ -136,10 +136,10 @@ struct ContentView: View {
             // Высота первого дня меняется и при входе в edit (поле вместо текста, события): ленту двигать нельзя,
             // иначе она сдвигается на пункт-два. Подгонка нужна только там, где лента стоит по якорю периода.
             .onChange(of: periodItemHeight) {
-                if desktop.mode == .solid || desktop.mode == .move { restorePosition(proxy) }
+                if desktop.mode == .locked || desktop.mode == .move { restorePosition(proxy) }
             }
             .onChange(of: desktop.periodOffset) { restorePosition(proxy) }
-            // После смены ширины лента возвращается на место: в solid к сегодняшнему дню, в остальных режимах
+            // После смены ширины лента возвращается на место: в locked к сегодняшнему дню, в остальных режимах
             // к верхнему из видимых дней.
             .onChange(of: desktop.appearance.width) { restorePosition(proxy) }
             // Смена размера шрифта меняет высоту строк: лента возвращается на место так же.
@@ -166,7 +166,7 @@ struct ContentView: View {
                 }
                 if oldMode == .edit { focusedDay = nil }
                 // Выход из просмотра возвращает ленту к сегодняшнему дню (месяц и неделю к текущему отрезку).
-                if mode == .solid {
+                if mode == .locked {
                     periodOffset = 0
                     if activePeriodStart == nil {
                         scrollHome(proxy)
@@ -174,7 +174,7 @@ struct ContentView: View {
                         // Лента под слоем периода встаёт на место, когда слой уже её закрыл (не видно прыжка).
                         Task {
                             try? await Task.sleep(for: .milliseconds(300))
-                            if desktop.mode == .solid { scrollHome(proxy) }
+                            if desktop.mode == .locked { scrollHome(proxy) }
                         }
                     }
                 }
@@ -183,7 +183,7 @@ struct ContentView: View {
             // после отрисовки при запуске прокручиваем ещё раз, уже точно.
             .task {
                 try? await Task.sleep(for: .milliseconds(150))
-                if desktop.mode == .solid { scrollHome(proxy) }
+                if desktop.mode == .locked { scrollHome(proxy) }
             }
             // Окно становится key не сразу: активация приложения асинхронна. Фокус, поставленный до этого,
             // не даёт курсора (лента «листает фокус», но курсора нет), поэтому ставим его заново, когда окно готово.
@@ -222,11 +222,11 @@ struct ContentView: View {
                     // Период мог начаться или кончиться: окно подгоняется заново.
                     rebuildDays(proxy)
                     desktop.fitWindow()
-                    if desktop.mode == .solid { scrollHome(proxy) }
+                    if desktop.mode == .locked { scrollHome(proxy) }
                 }
             }
         }
-        // Режим «Период» в solid: ленту заменяет статичный слой периода, лента под ним невидима. В остальных видах
+        // Режим «Период» в locked: ленту заменяет статичный слой периода, лента под ним невидима. В остальных видах
         // лента остаётся без этих надстроек.
         .modifier(PeriodSwap(isActive: desktop.appearance.viewKind == .period,
                              hidesContent: desktop.shownPeriod != nil, layer: periodLayer))
@@ -312,7 +312,7 @@ struct ContentView: View {
     }
 
     /// Режим в правом верхнем углу: появляется сразу при смене режима. Горит в scroll, edit и move;
-    /// solid показывается секунду и плавно гаснет.
+    /// locked показывается секунду и плавно гаснет.
     private var modeIndicator: some View {
         // Промежуток в полпробела, а знак «>» опущен на пару пунктов, чтобы стоять по центру строчных букв.
         HStack(spacing: 4) {
@@ -331,7 +331,7 @@ struct ContentView: View {
         .opacity(isIndicatorVisible ? 0.5 : 0)
         .task(id: desktop.mode) {
             isIndicatorVisible = true
-            guard desktop.mode == .solid else { return }
+            guard desktop.mode == .locked else { return }
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.6)) { isIndicatorVisible = false }
@@ -358,7 +358,7 @@ struct ContentView: View {
                 // Пока раскрыт выбор цвета, поля ввода нет вовсе: даже скрытое, оно заставляет курсор мыши
                 // над рядом цветов становиться текстовым. Вместо него обычный текст.
                 if desktop.mode == .edit && pickerDay != day {
-                    // Буквы рисует тот же Text, что и в solid (поле ввода рисует тот же шрифт на пиксель иначе, и
+                    // Буквы рисует тот же Text, что и в locked (поле ввода рисует тот же шрифт на пиксель иначе, и
                     // записи «подскакивали» при входе в edit). Поле остаётся для курсора, выделения и ввода, а его
                     // собственный текст прозрачен. Если строка шире колонки, она переносится, и перенос в поле
                     // и в Text мог бы отличаться: тогда текст показывает само поле.
@@ -373,7 +373,7 @@ struct ContentView: View {
                         .opacity(desktop.appearance.textOpacity)
                         .focused($focusedDay, equals: day)
                     if overlaysText {
-                        // Высоту строки задаёт тот же Text, что и в solid, а поле лежит поверх и на размер не влияет:
+                        // Высоту строки задаёт тот же Text, что и в locked, а поле лежит поверх и на размер не влияет:
                         // поле чуть выше текста, и строки ленты (вместе с событиями под ними) сдвигались при входе в edit.
                         recordText(AttributedString(text))
                             .allowsHitTesting(false)
@@ -462,7 +462,7 @@ struct ContentView: View {
         desktop.events.load(days: days, calendarIDs: ids)
     }
 
-    /// Запись в ленте (solid, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
+    /// Запись в ленте (locked, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
     private func recordText(_ text: AttributedString) -> some View {
         // Текст, дойдя до края окна, переносится на следующую строку и виден целиком.
         Text(text)
@@ -485,7 +485,7 @@ struct ContentView: View {
     private static let noteArrowWidth = 20.0
 
     /// Косая стрелка в конце строки. Нет ссылки: бледная кнопка только в edit, по нажатию заметка связывается с днём.
-    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в solid клики проходят сквозь окно);
+    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в locked клики проходят сквозь окно);
     /// убрать ссылку можно только в edit.
     @ViewBuilder private func noteArrow(_ day: Date) -> some View {
         let key = DayStore.key(for: day)
@@ -506,7 +506,7 @@ struct ContentView: View {
             .padding(.top, desktop.appearance.rowPadding)
             .allowsHitTesting(isActive)
             .contextMenu {
-                if hasNote && isEdit { Button("Убрать ссылку на заметку") { setNote(nil, for: day) } }
+                if hasNote && isEdit { Button("Remove Note Link") { setNote(nil, for: day) } }
             }
         }
     }
@@ -671,7 +671,7 @@ struct ContentView: View {
     }
 
     private func restorePosition(_ proxy: ScrollViewProxy) {
-        if desktop.mode == .solid || (desktop.mode == .move && activePeriodStart != nil) {
+        if desktop.mode == .locked || (desktop.mode == .move && activePeriodStart != nil) {
             scrollHome(proxy)
         } else {
             proxy.scrollTo(topVisibleDay, anchor: .top)

@@ -304,8 +304,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "d-cal";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "D-Cal создаёт и открывает заметку дня в Apple Notes.";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "D-Cal показывает события выбранных календарей рядом с записью дня. Данные только читаются.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "D-Cal creates and opens the daily note in Apple Notes.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "D-Cal shows events from the calendars you choose next to each day's entry. Calendar data is only read.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -347,8 +347,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "d-cal";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "D-Cal создаёт и открывает заметку дня в Apple Notes.";
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "D-Cal показывает события выбранных календарей рядом с записью дня. Данные только читаются.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "D-Cal creates and opens the daily note in Apple Notes.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "D-Cal shows events from the calendars you choose next to each day's entry. Calendar data is only read.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

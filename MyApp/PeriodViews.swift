@@ -8,7 +8,7 @@ extension ContentView {
         var frames: [Date: ClosedRange<Double>] = [:]
     }
 
-    /// Название периода в строке его первого дня, слева от линий (solid и move).
+    /// Название периода в строке его первого дня, слева от линий (locked и move).
     struct PeriodTitles: View {
         let desktop: DesktopController
         let day: Date
@@ -166,7 +166,7 @@ extension ContentView {
         return desktop.appearance.activePeriod.map { Self.calendar.startOfDay(for: $0.start) }
     }
 
-    /// Режим «Период» в solid и move: дни идущего периода отдельным статичным слоем, начало на `periodOffset` pt
+    /// Режим «Период» в locked и move: дни идущего периода отдельным статичным слоем, начало на `periodOffset` pt
     /// ниже верха окна (точно, без прокрутки). Лента под ним невидима, но стоит так же и проявляется в scroll и edit.
     @ViewBuilder var periodLayer: some View {
         // В edit слой убран: его поля ввода дублировали бы поля ленты (общий фокус). К этому моменту он уже невидим.

@@ -17,38 +17,40 @@ private struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Picker("Режим", selection: Binding(get: { desktop.mode }, set: { desktop.mode = $0 })) {
-            ForEach([Mode.solid, .scroll, .edit], id: \.self) { Text($0.rawValue) }
+        // Режимы и виды сразу в меню (без выпадающих списков), у текущего галочка. В заголовке подсказка хоткея.
+        // Заголовки это обычные строки, а не Section и не Picker: те сами рисуют разделители вокруг своих пунктов.
+        Text("Mode · Opt+M, Esc → locked")
+        ForEach(Mode.allCases, id: \.self) { mode in
+            Toggle(mode.rawValue.capitalized, isOn: Binding(get: { desktop.mode == mode }, set: { _ in desktop.mode = mode }))
         }
-        Picker("Отрезок", selection: Binding(
-            get: { desktop.appearance.viewKind }, set: { desktop.appearance.viewKind = $0 })
-        ) {
-            ForEach(ViewKind.allCases, id: \.self) { Text($0.title) }
+        Divider()
+        Text("View")
+        ForEach(ViewKind.allCases, id: \.self) { kind in
+            Toggle(kind.title, isOn: Binding(
+                get: { desktop.appearance.viewKind == kind }, set: { _ in desktop.appearance.viewKind = kind }))
         }
-        Button("Переместить окно") { desktop.mode = .move }
-        Button("Настройки…") {
+        Divider()
+        Menu("Data") {
+            Button("Export as JSON…") { Export.save(markdown: false) }
+            Button("Export as Markdown…") { Export.save(markdown: true) }
+            Divider()
+            Button("Data Folder…") { Export.chooseDataFolder() }
+            Button("Show File in Finder") { NSWorkspace.shared.activateFileViewerSelecting([DayStore.defaultURL]) }
+        }
+        Button("Settings…") {
             openWindow(id: "settings")
             NSApp.activate()
             // Окно настроек (обычное, не лента) поверх остальных окон. Оно появляется не мгновенно, поэтому с паузой.
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
-                for window in NSApp.windows where window.title == "Настройки" {
+                for window in NSApp.windows where window.title == "Settings" {
                     window.level = .floating
                     window.makeKeyAndOrderFront(nil)
                 }
             }
         }
-        Menu("Экспорт данных") {
-            Button("JSON…") { Export.save(markdown: false) }
-            Button("Markdown…") { Export.save(markdown: true) }
-        }
-        Button("Папка данных…") { Export.chooseDataFolder() }
-        Button("Показать файл данных в Finder") { NSWorkspace.shared.activateFileViewerSelecting([DayStore.defaultURL]) }
-        Menu("Настройки: файл") {
-            Button("Экспорт настроек…") { desktop.appearance.exportSettings() }
-            Button("Импорт настроек…") { desktop.appearance.importSettings() }
-        }
-        Button("Выход") { NSApp.terminate(nil) }
+        Divider()
+        Button("Quit") { NSApp.terminate(nil) }
     }
 }
 
@@ -59,7 +61,7 @@ private struct MenuContent: View {
         MenuBarExtra("D-Cal", systemImage: "calendar") {
             MenuContent(desktop: delegate.desktop)
         }
-        Window("Настройки", id: "settings") {
+        Window("Settings", id: "settings") {
             SettingsView(appearance: delegate.desktop.appearance, events: delegate.desktop.events)
         }
         .windowResizability(.contentSize)

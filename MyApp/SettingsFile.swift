@@ -100,7 +100,7 @@ extension Appearance {
         do {
             try settingsJSON().write(to: url, options: .atomic)
         } catch {
-            Self.showAlert("Не удалось сохранить настройки", error.localizedDescription)
+            Self.showAlert("Could not save the settings", error.localizedDescription)
         }
     }
 
@@ -114,7 +114,7 @@ extension Appearance {
         do {
             try applySettings(Data(contentsOf: url))
         } catch {
-            Self.showAlert("Не удалось загрузить настройки", "Файл не похож на настройки D-Cal.")
+            Self.showAlert("Could not load the settings", "The file doesn't look like D-Cal settings.")
         }
     }
 

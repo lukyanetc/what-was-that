@@ -64,9 +64,9 @@ struct DayStoreTests {
         let store = makeStore()
         try Data("не json".utf8).write(to: store.url)
         defer { try? FileManager.default.removeItem(at: store.url) }
-        do { _ = try store.load() } catch { #expect(DayStore.problemText(for: error).contains("повреждён")) }
+        do { _ = try store.load() } catch { #expect(DayStore.problemText(for: error).contains("corrupted")) }
         #expect(DayStore.problemText(for: CocoaError(.fileReadNoSuchFile)).contains("iCloud"))
-        #expect(DayStore.problemText(for: CocoaError(.fileWriteNoPermission)).contains("Не удалось"))
+        #expect(DayStore.problemText(for: CocoaError(.fileWriteNoPermission)).contains("Could not"))
     }
 
     @Test func pathWithSpacesIsFound() throws {
@@ -102,7 +102,7 @@ struct ExportTests {
                        "2026-03-12": DayEntry(text: "b", note: AppleNotes.prefix + "x-coredata://1")]
         #expect(Export.markdown(entries, today: day(3, 11)) == """
             - 2026-03-10 — Ремонт
-              вторая [заметка](https://example.com/n)
+              вторая [note](https://example.com/n)
             - 2026-03-11
             - 2026-03-12 — b
 

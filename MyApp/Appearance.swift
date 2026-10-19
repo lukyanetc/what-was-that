@@ -6,10 +6,10 @@ enum ViewKind: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .feed: "Лента"
-        case .month: "Месяц"
-        case .week: "Неделя"
-        case .period: "Период"
+        case .feed: "Feed"
+        case .month: "Month"
+        case .week: "Week"
+        case .period: "Range"
         }
     }
 
@@ -25,7 +25,7 @@ enum NoteApp: String, CaseIterable {
         switch self {
         case .obsidian: "Obsidian"
         case .appleNotes: "Apple Notes"
-        case .manual: "Другой (вручную)"
+        case .manual: "Other (manual)"
         }
     }
 }

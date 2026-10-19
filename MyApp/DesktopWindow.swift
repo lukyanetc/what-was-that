@@ -1,15 +1,15 @@
 import SwiftUI
 import Carbon
 
-/// solid → scroll → edit → solid по Opt+M. move (перемещение окна) включается отдельной кнопкой в меню.
+/// locked → scroll → edit → locked по Opt+M. move (перемещение окна) включается отдельной кнопкой в меню.
 enum Mode: String, CaseIterable {
-    case solid, scroll, edit, move
+    case locked, scroll, edit, move
 
     var next: Mode {
         switch self {
-        case .solid: .scroll
+        case .locked: .scroll
         case .scroll: .edit
-        case .edit, .move: .solid
+        case .edit, .move: .locked
         }
     }
 }
@@ -51,7 +51,7 @@ final class DesktopWindow: NSWindow {
 
 /// Окно на уровне обоев + текущий режим.
 @Observable final class DesktopController {
-    var mode = Mode.solid {
+    var mode = Mode.locked {
         didSet {
             if oldValue == .move { savePeriodTop() }
             apply()
@@ -61,11 +61,11 @@ final class DesktopWindow: NSWindow {
     let appearance = Appearance()
     /// События системного календаря (только чтение).
     let events = CalendarEvents()
-    /// Период, который окно показывает сейчас: режим «Период», пока период идёт, и только в solid и move.
+    /// Период, который окно показывает сейчас: режим «Период», пока период идёт, и только в locked и move.
     /// Остальные дни при этом прозрачны; в scroll и edit они проявляются, окно и лента не меняются.
     /// Период, который не помещается в окно, не показывается отдельно: тогда режим «Период» показывает ленту.
     var shownPeriod: Period? {
-        guard appearance.viewKind == .period, mode == .solid || mode == .move, periodFits else { return nil }
+        guard appearance.viewKind == .period, mode == .locked || mode == .move, periodFits else { return nil }
         return appearance.activePeriod
     }
     /// Высота периода в ленте; измеряет статичный слой периода, даже когда он невидим.
@@ -167,12 +167,12 @@ final class DesktopWindow: NSWindow {
         apply()
         events.refreshAuthorization()
 
-        // Opt+M: solid → scroll → edit → solid
+        // Opt+M: locked → scroll → edit → locked
         hotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: optionKey) { [weak self] in
-            self?.mode = self?.mode.next ?? .solid
+            self?.mode = self?.mode.next ?? .locked
         }
         // Запоминаем, какое приложение было активным до нас. Нельзя брать его только в момент входа в edit:
-        // приложение может быть активным уже в solid (например, сразу после запуска), и тогда запоминать нечего.
+        // приложение может быть активным уже в locked (например, сразу после запуска), и тогда запоминать нечего.
         let current = NSRunningApplication.current
         if let front = NSWorkspace.shared.frontmostApplication, !front.isEqual(current) { lastExternalApp = front }
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -189,11 +189,11 @@ final class DesktopWindow: NSWindow {
             MainActor.assumeIsolated { self?.refreshWallpaper() }
         }
         // Клавиши окна (работают, когда окно в фокусе, то есть в edit и move). Монитор получает и повторы при
-        // зажатой клавише. Esc → solid; стрелки вверх/вниз и Enter переносят фокус на соседний день.
+        // зажатой клавише. Esc → locked; стрелки вверх/вниз и Enter переносят фокус на соседний день.
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, mode != .solid else { return event }
+            guard let self, mode != .locked else { return event }
             switch Int(event.keyCode) {
-            case kVK_Escape: mode = .solid
+            case kVK_Escape: mode = .locked
             case kVK_UpArrow, kVK_DownArrow, kVK_Return, kVK_ANSI_KeypadEnter:
                 let code = Int(event.keyCode)
                 let isReturn = code != kVK_UpArrow && code != kVK_DownArrow
@@ -325,16 +325,16 @@ final class DesktopWindow: NSWindow {
     private func apply() {
         refreshWallpaper()
         if mode == .scroll {
-            if escapeKey == nil { escapeKey = HotKey(keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.mode = .solid } }
+            if escapeKey == nil { escapeKey = HotKey(keyCode: kVK_Escape, modifiers: 0) { [weak self] in self?.mode = .locked } }
         } else {
             escapeKey?.unregister()
             escapeKey = nil
         }
         window?.isMoveMode = mode == .move
-        window?.ignoresMouseEvents = mode == .solid
-        // solid: под значками рабочего стола. Остальные режимы: чуть выше значков (но всё равно ниже обычных окон),
+        window?.ignoresMouseEvents = mode == .locked
+        // locked: под значками рабочего стола. Остальные режимы: чуть выше значков (но всё равно ниже обычных окон),
         // иначе клики перехватывает рабочий стол Finder.
-        let key: CGWindowLevelKey = mode == .solid ? .desktopWindow : .desktopIconWindow
+        let key: CGWindowLevelKey = mode == .locked ? .desktopWindow : .desktopIconWindow
         window?.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(key)) + 1)
         if mode == .edit || mode == .move {
             NSApp.activate()

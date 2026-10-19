@@ -7,9 +7,9 @@ enum EventsMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .show: "Показывать"
-        case .hide: "Не показывать"
-        case .future: "Только будущие (прошлые как «+N»)"
+        case .show: "Show"
+        case .hide: "Hide"
+        case .future: "Future only (past ones as “+N”)"
         }
     }
 }

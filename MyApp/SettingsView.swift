@@ -13,36 +13,36 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Отрезок времени") {
-                Picker("Показывать", selection: $appearance.viewKind) {
+            Section("View") {
+                Picker("Show", selection: $appearance.viewKind) {
                     ForEach(ViewKind.allCases, id: \.self) { Text($0.title) }
                 }
                 .pickerStyle(.segmented)
             }
-            Section("Мои отрезки") {
+            Section("My Ranges") {
                 ForEach(appearance.periods) { period in
                     periodRow(period.id)
                 }
                 HStack {
-                    Button("Добавить отрезок") {
+                    Button("Add Range") {
                         let today = Calendar.current.startOfDay(for: .now)
                         let end = Calendar.current.date(byAdding: .day, value: 6, to: today) ?? today
                         appearance.periods.append(Period(name: "", start: today, end: end))
                     }
                     Spacer()
-                    Button("Удалить истекшие") {
+                    Button("Remove Expired") {
                         appearance.periods.removeAll { $0.isExpired(on: .now) }
                     }
                     .disabled(!appearance.periods.contains { $0.isExpired(on: .now) })
                 }
-                Toggle("Показывать отрезки в ленте", isOn: $appearance.showsPeriodsInFeed)
-                Toggle("Счётчик дней под названием", isOn: $appearance.showsPeriodCounter)
-                Text("Режим «Период» показывает только дни самого длинного из идущих отрезков, короткие видны внутри него. В «Месяце» и «Неделе» отрезков нет, в «Ленте» их можно отключить.")
+                Toggle("Show ranges in the feed", isOn: $appearance.showsPeriodsInFeed)
+                Toggle("Day counter under the title", isOn: $appearance.showsPeriodCounter)
+                Text("The Range view shows only the days of the longest current range; shorter ones appear inside it. Month and Week views have no ranges; in the Feed they can be turned off.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Календарь") {
-                Picker("События", selection: $appearance.eventsMode) {
+            Section("Calendar") {
+                Picker("Events", selection: $appearance.eventsMode) {
                     ForEach(EventsMode.allCases, id: \.self) { Text($0.title) }
                 }
                 if events.isAuthorized {
@@ -55,94 +55,103 @@ struct SettingsView: View {
                             }))
                     }
                 } else {
-                    Button("Разрешить доступ к календарю") { Task { await events.requestAccess() } }
+                    Button("Allow Calendar Access") { Task { await events.requestAccess() } }
                 }
-                Text("Только чтение. Google Calendar виден здесь, если аккаунт добавлен в системные настройки (Учётные записи интернета).")
+                Text("Read-only. Google Calendar appears here if the account is added in System Settings (Internet Accounts).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Заметки") {
-                Picker("Заметочник", selection: $appearance.noteApp) {
+            Section("Notes") {
+                Picker("Notes app", selection: $appearance.noteApp) {
                     ForEach(NoteApp.allCases, id: \.self) { Text($0.title) }
                 }
                 switch appearance.noteApp {
                 case .obsidian:
-                    TextField("Хранилище (vault)", text: $appearance.obsidianVault)
-                    TextField("Папка (необязательно)", text: $appearance.obsidianFolder)
-                    TextField("Имя файла", text: $appearance.obsidianFileFormat)
-                    LabeledContent("Пример") {
+                    TextField("Vault", text: $appearance.obsidianVault)
+                    TextField("Folder (optional)", text: $appearance.obsidianFolder)
+                    TextField("File name", text: $appearance.obsidianFileFormat)
+                    LabeledContent("Example") {
                         Text(MomentFormat.string(from: .now, pattern: appearance.obsidianFileFormat))
                     }
-                    Text("Стрелка в конце строки в edit создаёт заметку дня в Obsidian (если её нет) и открывает её. Дальше стрелка открывает эту же заметку в scroll и edit.")
+                    Text("In Edit mode, the arrow at the end of a row creates the day's note in Obsidian (if it doesn't exist) and opens it. After that the arrow opens the same note in Scroll and Edit.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .appleNotes:
-                    TextField("Папка (необязательно)", text: $appearance.appleNotesFolder)
-                    TextField("Имя заметки", text: $appearance.appleNotesFormat)
-                    LabeledContent("Пример") {
+                    TextField("Folder (optional)", text: $appearance.appleNotesFolder)
+                    TextField("Note name", text: $appearance.appleNotesFormat)
+                    LabeledContent("Example") {
                         Text(MomentFormat.string(from: .now, pattern: appearance.appleNotesFormat))
                     }
-                    Text("Стрелка в конце строки в edit создаёт заметку дня в Notes (если её нет) и открывает её. Дальше стрелка открывает эту же заметку в scroll и edit. При первом разе macOS спросит разрешение на управление Notes.")
+                    Text("In Edit mode, the arrow at the end of a row creates the day's note in Notes (if it doesn't exist) and opens it. After that the arrow opens the same note in Scroll and Edit. The first time, macOS asks for permission to control Notes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .manual:
-                    TextField("Шаблон ссылки или пути к файлу", text: $appearance.noteTemplate)
-                    LabeledContent("Пример") { Text(appearance.noteTemplateExample).lineLimit(1).truncationMode(.middle) }
-                    Text("Дата подставляется так: {YYYY-MM-DD}. Ссылка: scheme://…, например bear://x-callback-url/open-note?title={YYYY-MM-DD} (заметка должна уже быть). Файл: путь с / или ~, например ~/Notes/Daily/{YYYY-MM-DD}.md (если файла нет, он создаётся пустым и открывается в приложении по умолчанию).")
+                    TextField("Link or file path template", text: $appearance.noteTemplate)
+                    LabeledContent("Example") { Text(appearance.noteTemplateExample).lineLimit(1).truncationMode(.middle) }
+                    Text("The date goes in like this: {YYYY-MM-DD}. Link: scheme://…, for example bear://x-callback-url/open-note?title={YYYY-MM-DD} (the note must already exist). File: a path starting with / or ~, for example ~/Notes/Daily/{YYYY-MM-DD}.md (if the file doesn't exist, it is created empty and opened in the default app).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let guide = Self.notesGuide {
-                    Link("Инструкции для популярных заметочников", destination: guide)
+                    Link("Guides for popular notes apps", destination: guide)
                 }
             }
-            Section("Текст") {
-                ColorPicker("Цвет", selection: $appearance.color, supportsOpacity: false)
-                Toggle("Подстраивать под обои", isOn: $appearance.adapts)
-                Slider(value: $appearance.textOpacity, in: 0.2...1) { Text("Прозрачность") }
-                Picker("Шрифт", selection: $appearance.fontName) {
-                    Text("Системный").tag(Appearance.systemFont)
+            Section("Text") {
+                ColorPicker("Color", selection: $appearance.color, supportsOpacity: false)
+                Toggle("Adapt to wallpaper", isOn: $appearance.adapts)
+                Slider(value: $appearance.textOpacity, in: 0.2...1) { Text("Opacity") }
+                Picker("Font", selection: $appearance.fontName) {
+                    Text("System").tag(Appearance.systemFont)
                     ForEach(Appearance.fonts, id: \.self) { Text($0).tag($0) }
                 }
                 Slider(value: $appearance.fontSize, in: Appearance.fontSizeRange, step: 1) {
-                    Text("Размер шрифта: \(Int(appearance.fontSize))")
+                    Text("Font size: \(Int(appearance.fontSize))")
                 }
                 Slider(value: $appearance.rowPadding, in: Appearance.rowPaddingRange, step: 1) {
-                    Text("Расстояние между строками: \(Int(appearance.rowPadding * 2))")
+                    Text("Row spacing: \(Int(appearance.rowPadding * 2))")
                 }
-                Toggle("Заглавные буквы", isOn: $appearance.uppercase)
+                Toggle("Uppercase", isOn: $appearance.uppercase)
                 Text(appearance.isMeasured
-                     ? "Обои под лентой: \(appearance.luminance < 0.5 ? "тёмные" : "светлые") (\(Int(appearance.luminance * 100))%)"
-                     : "Обои не удалось измерить, ориентируюсь на тему системы")
+                     ? "Wallpaper under the feed: \(appearance.luminance < 0.5 ? "dark" : "light") (\(Int(appearance.luminance * 100))%)"
+                     : "Couldn't measure the wallpaper; following the system appearance")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Формат даты") {
-                formatField("Формат", text: $appearance.dateFormat, presets: Self.datePresets)
-                LabeledContent("Пример") { Text(appearance.dayText(.now)) }
-                Text("Как в moment.js, без времени: YYYY YY MMMM MMM MM M Do DD D dddd ddd dd E Q W w DDD. Текст в [скобках] выводится как есть.")
+            Section("Date Format") {
+                formatField("Format", text: $appearance.dateFormat, presets: Self.datePresets)
+                LabeledContent("Example") { Text(appearance.dayText(.now)) }
+                Text("Like moment.js, date only: YYYY YY MMMM MMM MM M Do DD D dddd ddd dd E Q W w DDD. Text in [brackets] is shown as is.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Месяц") {
-                Toggle("Показывать заголовки месяцев", isOn: $appearance.showsMonth)
+            Section("Month") {
+                Toggle("Show month headings", isOn: $appearance.showsMonth)
                 if appearance.showsMonth {
-                    formatField("Формат", text: $appearance.monthFormat, presets: Self.monthPresets)
-                    Toggle("Жирный шрифт", isOn: $appearance.monthBold)
-                    LabeledContent("Пример") { Text(appearance.monthText(.now)).bold(appearance.monthBold) }
+                    formatField("Format", text: $appearance.monthFormat, presets: Self.monthPresets)
+                    Toggle("Bold", isOn: $appearance.monthBold)
+                    LabeledContent("Example") { Text(appearance.monthText(.now)).bold(appearance.monthBold) }
                 }
             }
-            Section("Неделя") {
-                Toggle("Номер недели у понедельника", isOn: $appearance.showsWeekNumber)
-                Toggle("Увеличенный отступ между неделями", isOn: $appearance.weekGap)
+            Section("Week") {
+                Toggle("Week number on Mondays", isOn: $appearance.showsWeekNumber)
+                Toggle("Larger gap between weeks", isOn: $appearance.weekGap)
             }
-            Section("Окно") {
-                Slider(value: $appearance.width, in: Appearance.widthRange, step: 10) { Text("Ширина") }
-                Slider(value: $appearance.edgeFade, in: 0...150, step: 5) { Text("Затухание у краёв") }
+            Section("Window") {
+                Slider(value: $appearance.width, in: Appearance.widthRange, step: 10) { Text("Width") }
+                Slider(value: $appearance.edgeFade, in: 0...150, step: 5) { Text("Edge fade") }
             }
-            Section("Линия выделения сегодняшнего дня") {
-                ColorPicker("Цвет и прозрачность",
+            Section("Today Highlight") {
+                ColorPicker("Color and opacity",
                             selection: Binding(get: { appearance.highlightColor }, set: { appearance.highlight = $0 }))
+            }
+            Section("Settings File") {
+                HStack {
+                    Button("Export…") { appearance.exportSettings() }
+                    Button("Import…") { appearance.importSettings() }
+                }
+                Text("All settings except the selected calendars and the window position, in one JSON file.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -160,17 +169,17 @@ struct SettingsView: View {
             })
         let isExpired = period.wrappedValue.isExpired(on: .now)
         return VStack(alignment: .leading) {
-            TextField("Название", text: period.name)
+            TextField("Name", text: period.name)
             HStack {
-                DatePicker("Начало", selection: Binding(
+                DatePicker("Start", selection: Binding(
                     get: { period.wrappedValue.start },
                     set: {
                         period.wrappedValue.start = $0
                         // Конец не может быть раньше начала.
                         if period.wrappedValue.end < $0 { period.wrappedValue.end = $0 }
                     }), displayedComponents: .date)
-                DatePicker("Конец", selection: period.end, in: period.wrappedValue.start..., displayedComponents: .date)
-                Button("Удалить", systemImage: "trash") {
+                DatePicker("End", selection: period.end, in: period.wrappedValue.start..., displayedComponents: .date)
+                Button("Delete", systemImage: "trash") {
                     appearance.periods.removeAll { $0.id == id }
                 }
                 .labelStyle(.iconOnly)
@@ -179,7 +188,7 @@ struct SettingsView: View {
             // Длинный период не помещается в окно: режим «Период» покажет вместо него обычную ленту.
             if !isExpired, appearance.estimatedHeight(of: period.wrappedValue)
                 > appearance.periodRoom(screenHeight: Double(NSScreen.main?.frame.height ?? 0)) {
-                Text("Не помещается в окно: режим «Период» покажет ленту")
+                Text("Doesn't fit in the window: the Range view will show the feed")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -192,7 +201,7 @@ struct SettingsView: View {
     private func formatField(_ title: String, text: Binding<String>, presets: [String]) -> some View {
         HStack {
             TextField(title, text: text)
-            Menu("Шаблоны") {
+            Menu("Presets") {
                 ForEach(presets, id: \.self) { preset in
                     Button("\(preset)  →  \(MomentFormat.string(from: .now, pattern: preset))") { text.wrappedValue = preset }
                 }

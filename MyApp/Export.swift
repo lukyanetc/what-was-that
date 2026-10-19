@@ -47,7 +47,7 @@ enum Export {
                 // Следующие строки дня стоят под первой с отступом, чтобы остаться в том же пункте списка.
                 line += " — " + text.replacingOccurrences(of: "\n", with: "\n  ")
             }
-            if let note = entry?.note, !note.hasPrefix(AppleNotes.prefix) { line += " [заметка](\(note))" }
+            if let note = entry?.note, !note.hasPrefix(AppleNotes.prefix) { line += " [note](\(note))" }
             return line
         }.joined(separator: "\n") + "\n"
     }
@@ -56,7 +56,7 @@ enum Export {
     static func save(markdown isMarkdown: Bool) {
         NSApp.activate()
         guard let entries = try? DayStore().load(), !entries.isEmpty else {
-            alert("Нет данных для экспорта", "Файл данных пуст или его не удалось прочитать.")
+            alert("No data to export", "The data file is empty or could not be read.")
             return
         }
         let panel = NSSavePanel()
@@ -67,7 +67,7 @@ enum Export {
             let data = isMarkdown ? Data(markdown(entries).utf8) : try json(entries)
             try data.write(to: url, options: .atomic)
         } catch {
-            alert("Не удалось сохранить файл", error.localizedDescription)
+            alert("Could not save the file", error.localizedDescription)
         }
     }
 
@@ -79,7 +79,7 @@ enum Export {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.message = "Папка для файла d-cal.json (например, в iCloud Drive)"
+        panel.message = "Folder for the d-cal.json file (for example, in iCloud Drive)"
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         let current = DayStore.defaultURL
         let target = folder.appending(path: "d-cal.json")
@@ -87,14 +87,14 @@ enum Export {
         let manager = FileManager.default
         if manager.fileExists(atPath: target.path(percentEncoded: false)) {
             let alert = NSAlert()
-            alert.messageText = "В этой папке уже есть d-cal.json"
-            alert.informativeText = "Приложение будет работать с ним. Текущий файл останется на прежнем месте."
-            alert.addButton(withTitle: "Использовать")
-            alert.addButton(withTitle: "Отмена")
+            alert.messageText = "This folder already contains d-cal.json"
+            alert.informativeText = "The app will use it. The current file stays where it is."
+            alert.addButton(withTitle: "Use")
+            alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         } else if manager.fileExists(atPath: current.path(percentEncoded: false)) {
             do { try manager.copyItem(at: current, to: target) } catch {
-                alert("Не удалось скопировать файл", error.localizedDescription)
+                alert("Could not copy the file", error.localizedDescription)
                 return
             }
         }
