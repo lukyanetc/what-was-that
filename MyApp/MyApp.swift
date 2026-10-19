@@ -50,6 +50,7 @@ private struct MenuContent: View {
                 }
             }
         }
+        Button("Check for Updates…") { desktop.updates.checkManually() }
         Divider()
         Button("Quit") { NSApp.terminate(nil) }
     }

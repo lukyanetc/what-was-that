@@ -61,6 +61,8 @@ final class DesktopWindow: NSWindow {
     let appearance = Appearance()
     /// События системного календаря (только чтение).
     let events = CalendarEvents()
+    /// Проверка обновлений через GitHub Releases.
+    let updates = UpdateChecker()
     /// Период, который окно показывает сейчас: режим «Период», пока период идёт, и только в locked и move.
     /// Остальные дни при этом прозрачны; в scroll и edit они проявляются, окно и лента не меняются.
     /// Период, который не помещается в окно, не показывается отдельно: тогда режим «Период» показывает ленту.
@@ -196,6 +198,7 @@ final class DesktopWindow: NSWindow {
         }
         apply()
         events.refreshAuthorization()
+        if appearance.checksUpdatesAtLaunch { Task { await updates.checkAtLaunch() } }
 
         // Opt+M: locked → scroll → edit → locked
         registerHotKey()

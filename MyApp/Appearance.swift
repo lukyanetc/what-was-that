@@ -177,6 +177,10 @@ enum NoteApp: String, CaseIterable {
     /// Apple Notes: папка (пусто — папка по умолчанию) и формат имени заметки дня.
     var appleNotesFolder: String { didSet { UserDefaults.standard.set(appleNotesFolder, forKey: "appleNotesFolder") } }
     var appleNotesFormat: String { didSet { UserDefaults.standard.set(appleNotesFormat, forKey: "appleNotesFormat") } }
+    /// Проверять обновления при запуске (не чаще раза в сутки).
+    var checksUpdatesAtLaunch: Bool {
+        didSet { UserDefaults.standard.set(checksUpdatesAtLaunch, forKey: "checksUpdatesAtLaunch") }
+    }
     /// Глобальный хоткей: код клавиши, модификаторы Carbon и подпись для показа («⌥M»). Меняется через `setHotKey`.
     var hotKeyCode: Int { didSet { UserDefaults.standard.set(hotKeyCode, forKey: "hotKeyCode") } }
     var hotKeyModifiers: Int { didSet { UserDefaults.standard.set(hotKeyModifiers, forKey: "hotKeyModifiers") } }
@@ -259,6 +263,7 @@ enum NoteApp: String, CaseIterable {
         appleNotesFolder = defaults.string(forKey: "appleNotesFolder") ?? ""
         appleNotesFormat = defaults.string(forKey: "appleNotesFormat") ?? "YYYY-MM-DD"
         noteTemplate = defaults.string(forKey: "noteTemplate") ?? ""
+        checksUpdatesAtLaunch = defaults.object(forKey: "checksUpdatesAtLaunch") as? Bool ?? true
         hotKeyCode = defaults.object(forKey: "hotKeyCode") as? Int ?? Self.defaultHotKey.code
         hotKeyModifiers = defaults.object(forKey: "hotKeyModifiers") as? Int ?? Self.defaultHotKey.modifiers
         hotKeyLabel = defaults.string(forKey: "hotKeyLabel") ?? Self.defaultHotKey.label

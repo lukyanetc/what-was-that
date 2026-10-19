@@ -167,6 +167,24 @@ struct SettingsFileTests {
     }
 }
 
+struct UpdateCheckerTests {
+    @Test(arguments: [
+        ("1.0.1", "1.0", true), ("v1.1", "1.0.9", true), ("2.0", "1.9.9", true), ("1.10", "1.9", true),
+        ("1.0", "1.0.0", false), ("v1.0.0", "1.0", false), ("0.9", "1.0", false), ("1.0.1-beta", "1.0.1", false),
+    ])
+    func comparesVersions(remote: String, local: String, isNewer: Bool) {
+        #expect(UpdateChecker.isNewer(remote, than: local) == isNewer)
+    }
+
+    @Test func parsesGitHubReleaseAndRejectsOtherJSON() {
+        let json = Data(#"{"tag_name": "v1.2.0", "html_url": "https://github.com/x/y/releases/tag/v1.2.0", "extra": 1}"#.utf8)
+        let release = UpdateChecker.parse(json)
+        #expect(release?.tag == "v1.2.0")
+        #expect(release?.page.absoluteString == "https://github.com/x/y/releases/tag/v1.2.0")
+        #expect(UpdateChecker.parse(Data(#"{"message": "Not Found"}"#.utf8)) == nil)
+    }
+}
+
 struct PeriodTests {
     private func day(_ month: Int, _ day: Int) -> Date {
         Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day))!

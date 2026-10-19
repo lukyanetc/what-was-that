@@ -285,6 +285,7 @@ struct SettingsView: View {
     // MARK: About
 
     private static let repoURL = URL(string: "https://github.com/lukyanetc/what-was-that")
+    private static let issuesURL = URL(string: "https://github.com/lukyanetc/what-was-that/issues")
 
     /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
     private var aboutTab: some View {
@@ -302,11 +303,16 @@ struct SettingsView: View {
             Text("Version \(version)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Button("Check for Updates…") { desktop.updates.checkManually() }
+                Toggle("Check at launch", isOn: $appearance.checksUpdatesAtLaunch)
+            }
             Text("Hi, I'm Maks. I make small, quiet tools for the desktop. What Was That!? is a calendar strip that lives on your wallpaper and stays out of the way. More about me soon.")
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
             VStack(spacing: 6) {
                 link("Source on GitHub", Self.repoURL)
+                link("Report a problem", Self.issuesURL)
                 link("Notes app guide", Self.notesGuide)
                 link("Date format guide", Self.formatGuide)
             }
