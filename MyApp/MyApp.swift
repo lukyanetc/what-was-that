@@ -19,7 +19,7 @@ private struct MenuContent: View {
     var body: some View {
         // Режимы и виды сразу в меню (без выпадающих списков), у текущего галочка. В заголовке подсказка хоткея.
         // Заголовки это обычные строки, а не Section и не Picker: те сами рисуют разделители вокруг своих пунктов.
-        Text("Mode · Opt+M, Esc → locked")
+        Text("Mode · \(desktop.appearance.hotKeyLabel), Esc → locked")
         ForEach(Mode.allCases, id: \.self) { mode in
             Toggle(mode.rawValue.capitalized, isOn: Binding(get: { desktop.mode == mode }, set: { _ in desktop.mode = mode }))
         }
@@ -43,7 +43,7 @@ private struct MenuContent: View {
             // Окно настроек (обычное, не лента) поверх остальных окон. Оно появляется не мгновенно, поэтому с паузой.
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
-                for window in NSApp.windows where window.title == "Settings" {
+                for window in NSApp.windows where window.title == "d-cal - settings" {
                     window.level = .floating
                     window.makeKeyAndOrderFront(nil)
                 }
@@ -61,10 +61,12 @@ private struct MenuContent: View {
         MenuBarExtra("D-Cal", systemImage: "calendar") {
             MenuContent(desktop: delegate.desktop)
         }
-        Window("Settings", id: "settings") {
-            SettingsView(appearance: delegate.desktop.appearance, events: delegate.desktop.events)
+        Window("d-cal - settings", id: "settings") {
+            SettingsView(desktop: delegate.desktop)
         }
         .windowResizability(.contentSize)
+        // Окно настроек можно таскать за любое свободное место (полосу закладок, фон), а не только за заголовок.
+        .windowBackgroundDragBehavior(.enabled)
         .defaultLaunchBehavior(.suppressed)
     }
 }

@@ -3,13 +3,13 @@ import SwiftUI
 
 /// Как показывать события календаря рядом с записью дня.
 enum EventsMode: String, CaseIterable {
-    case show, hide, future
+    case show, future, hide
 
     var title: String {
         switch self {
-        case .show: "Show"
-        case .hide: "Hide"
+        case .show: "Show all"
         case .future: "Future only (past ones as “+N”)"
+        case .hide: "Hide"
         }
     }
 }
@@ -29,7 +29,7 @@ struct CalendarEvent: Identifiable {
 /// События не копируются в d-cal.json: они только читаются и показываются.
 @Observable final class CalendarEvents {
     /// Календари, доступные для выбора (после выдачи доступа).
-    private(set) var calendars: [(id: String, title: String, source: String)] = []
+    private(set) var calendars: [(id: String, title: String, source: String, color: Color)] = []
     private(set) var isAuthorized = false
     /// События по дням: ключ как у `DayStore.key`; сначала события на весь день, дальше по времени.
     private(set) var byDay: [String: [CalendarEvent]] = [:]
@@ -53,7 +53,9 @@ struct CalendarEvent: Identifiable {
     private func updateAuthorization(_ granted: Bool) {
         isAuthorized = granted
         guard granted else { calendars = []; byDay = [:]; return }
-        calendars = store.calendars(for: .event).map { ($0.calendarIdentifier, $0.title, $0.source.title) }
+        calendars = store.calendars(for: .event).map {
+            ($0.calendarIdentifier, $0.title, $0.source.title, $0.cgColor.map { Color(cgColor: $0) } ?? .gray)
+        }
         if observer == nil {
             observer = NotificationCenter.default.addObserver(
                 forName: .EKEventStoreChanged, object: store, queue: .main

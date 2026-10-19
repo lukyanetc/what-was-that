@@ -34,6 +34,9 @@ struct SettingsFile: Codable {
     var appleNotesFolder: String?
     var appleNotesFormat: String?
     var noteTemplate: String?
+    var hotKeyCode: Int?
+    var hotKeyModifiers: Int?
+    var hotKeyLabel: String?
 }
 
 extension Appearance {
@@ -47,7 +50,8 @@ extension Appearance {
             fontName: fontName, fontSize: fontSize, rowPadding: rowPadding, showsWeekNumber: showsWeekNumber,
             weekGap: weekGap, eventsMode: eventsMode.rawValue, noteApp: noteApp.rawValue,
             obsidianVault: obsidianVault, obsidianFolder: obsidianFolder, obsidianFileFormat: obsidianFileFormat,
-            appleNotesFolder: appleNotesFolder, appleNotesFormat: appleNotesFormat, noteTemplate: noteTemplate)
+            appleNotesFolder: appleNotesFolder, appleNotesFormat: appleNotesFormat, noteTemplate: noteTemplate,
+            hotKeyCode: hotKeyCode, hotKeyModifiers: hotKeyModifiers, hotKeyLabel: hotKeyLabel)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(file)
@@ -88,6 +92,9 @@ extension Appearance {
         if let value = file.appleNotesFolder { appleNotesFolder = value }
         if let value = file.appleNotesFormat { appleNotesFormat = value }
         if let value = file.noteTemplate { noteTemplate = value }
+        if let code = file.hotKeyCode, let modifiers = file.hotKeyModifiers, let label = file.hotKeyLabel, modifiers != 0 {
+            setHotKey(code: code, modifiers: modifiers, label: label)
+        }
     }
 
     /// Окно сохранения и запись файла настроек (пункт меню).

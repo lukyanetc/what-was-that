@@ -465,7 +465,9 @@ struct ContentView: View {
     /// Запись в ленте (locked, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
     private func recordText(_ text: AttributedString) -> some View {
         // Текст, дойдя до края окна, переносится на следующую строку и виден целиком.
-        Text(text)
+        // Пустая запись рисуется пробелом: пустой Text ниже обычной строки на пиксель, и события календаря под ней
+        // сдвигались вниз, как только появлялась первая буква.
+        Text(text.characters.isEmpty ? AttributedString(" ") : text)
             .fadedLikeText(desktop.appearance)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)

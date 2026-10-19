@@ -1,8 +1,10 @@
 import SwiftUI
+import Carbon.HIToolbox
 
 /// Какой отрезок времени показывает окно: непрерывная лента, календарный месяц или неделя (пн–вс).
 enum ViewKind: String, CaseIterable {
-    case feed, month, week, period
+    // Порядок в меню и в настройках: Range рядом с Feed, Month и Week дальше (у них своя роль).
+    case feed, period, month, week
 
     var title: String {
         switch self {
@@ -175,6 +177,22 @@ enum NoteApp: String, CaseIterable {
     /// Apple Notes: папка (пусто — папка по умолчанию) и формат имени заметки дня.
     var appleNotesFolder: String { didSet { UserDefaults.standard.set(appleNotesFolder, forKey: "appleNotesFolder") } }
     var appleNotesFormat: String { didSet { UserDefaults.standard.set(appleNotesFormat, forKey: "appleNotesFormat") } }
+    /// Глобальный хоткей: код клавиши, модификаторы Carbon и подпись для показа («⌥M»). Меняется через `setHotKey`.
+    var hotKeyCode: Int { didSet { UserDefaults.standard.set(hotKeyCode, forKey: "hotKeyCode") } }
+    var hotKeyModifiers: Int { didSet { UserDefaults.standard.set(hotKeyModifiers, forKey: "hotKeyModifiers") } }
+    var hotKeyLabel: String { didSet { UserDefaults.standard.set(hotKeyLabel, forKey: "hotKeyLabel") } }
+    /// Вызывается после смены хоткея: контроллер перерегистрирует его.
+    @ObservationIgnored var onHotKeyChange: (() -> Void)?
+    /// Opt+M.
+    static let defaultHotKey = (code: kVK_ANSI_M, modifiers: optionKey, label: "⌥M")
+
+    func setHotKey(code: Int, modifiers: Int, label: String) {
+        hotKeyCode = code
+        hotKeyModifiers = modifiers
+        hotKeyLabel = label
+        onHotKeyChange?()
+    }
+
     /// «Другой (вручную)»: шаблон ссылки (`scheme://…`) или пути к файлу (`/…`, `~/…`); `{формат даты}` заменяется
     /// датой дня (как в moment.js).
     var noteTemplate: String { didSet { UserDefaults.standard.set(noteTemplate, forKey: "noteTemplate") } }
@@ -239,6 +257,9 @@ enum NoteApp: String, CaseIterable {
         appleNotesFolder = defaults.string(forKey: "appleNotesFolder") ?? ""
         appleNotesFormat = defaults.string(forKey: "appleNotesFormat") ?? "YYYY-MM-DD"
         noteTemplate = defaults.string(forKey: "noteTemplate") ?? ""
+        hotKeyCode = defaults.object(forKey: "hotKeyCode") as? Int ?? Self.defaultHotKey.code
+        hotKeyModifiers = defaults.object(forKey: "hotKeyModifiers") as? Int ?? Self.defaultHotKey.modifiers
+        hotKeyLabel = defaults.string(forKey: "hotKeyLabel") ?? Self.defaultHotKey.label
         dateColumnWidth = measureDateColumn()
         updatePeriodMetrics()
     }

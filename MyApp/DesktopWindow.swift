@@ -140,6 +140,24 @@ final class DesktopWindow: NSWindow {
         }
     }
 
+    /// Глобальный хоткей переключения режимов (по умолчанию Opt+M); комбинация задаётся в настройках.
+    func registerHotKey() {
+        hotKey?.unregister()
+        hotKey = HotKey(keyCode: appearance.hotKeyCode, modifiers: appearance.hotKeyModifiers) { [weak self] in
+            self?.mode = self?.mode.next ?? .locked
+        }
+    }
+
+    /// На время записи новой комбинации хоткей снимается, иначе система перехватит нажатие раньше окна настроек.
+    func pauseHotKey(_ paused: Bool) {
+        if paused {
+            hotKey?.unregister()
+            hotKey = nil
+        } else {
+            registerHotKey()
+        }
+    }
+
     var screenFrame: NSRect { (window?.screen ?? NSScreen.main)?.frame ?? .zero }
 
     func start() {
@@ -168,9 +186,8 @@ final class DesktopWindow: NSWindow {
         events.refreshAuthorization()
 
         // Opt+M: locked → scroll → edit → locked
-        hotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: optionKey) { [weak self] in
-            self?.mode = self?.mode.next ?? .locked
-        }
+        registerHotKey()
+        appearance.onHotKeyChange = { [weak self] in self?.registerHotKey() }
         // Запоминаем, какое приложение было активным до нас. Нельзя брать его только в момент входа в edit:
         // приложение может быть активным уже в locked (например, сразу после запуска), и тогда запоминать нечего.
         let current = NSRunningApplication.current
@@ -191,7 +208,8 @@ final class DesktopWindow: NSWindow {
         // Клавиши окна (работают, когда окно в фокусе, то есть в edit и move). Монитор получает и повторы при
         // зажатой клавише. Esc → locked; стрелки вверх/вниз и Enter переносят фокус на соседний день.
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, mode != .locked else { return event }
+            // Клавиши обрабатываются только в окне на рабочем столе: в окне настроек Esc, стрелки и Enter остаются его.
+            guard let self, event.window === window, mode != .locked else { return event }
             switch Int(event.keyCode) {
             case kVK_Escape: mode = .locked
             case kVK_UpArrow, kVK_DownArrow, kVK_Return, kVK_ANSI_KeypadEnter:
@@ -231,7 +249,9 @@ final class DesktopWindow: NSWindow {
         }
         // Месяц и неделя в scroll и edit: один жест (или щелчок колеса) листает на один отрезок.
         NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-            guard let self, mode == .scroll || mode == .edit, appearance.viewKind.isPaged else { return event }
+            // Только колесо над окном на рабочем столе: над окном настроек и другими окнами приложения листать нельзя.
+            guard let self, event.window === window, mode == .scroll || mode == .edit,
+                  appearance.viewKind.isPaged else { return event }
             // Прокрутка вниз (контент уезжает вверх) — следующий отрезок; направление уже учитывает натуральную прокрутку.
             let step = event.scrollingDeltaY < 0 ? 1 : -1
             if event.phase.contains(.began) || event.phase.contains(.mayBegin) {
