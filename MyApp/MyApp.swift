@@ -45,6 +45,8 @@ private struct MenuContent: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
                 for window in NSApp.windows where window.title == "what was that!? - settings" {
+                    // Окно выходит на том рабочем столе (Space), где его вызвали, а не остаётся на прежнем.
+                    window.collectionBehavior.insert(.moveToActiveSpace)
                     window.makeKeyAndOrderFront(nil)
                     window.orderFrontRegardless()
                 }
@@ -52,7 +54,7 @@ private struct MenuContent: View {
         }
         Button("Check for Updates…") { desktop.updates.checkManually() }
         Divider()
-        Button("Quit") { NSApp.terminate(nil) }
+        Button("Quit What Was That!?") { NSApp.terminate(nil) }
     }
 }
 
@@ -60,7 +62,8 @@ private struct MenuContent: View {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
-        MenuBarExtra("What Was That!?", systemImage: "calendar") {
+        // Значок в строке меню: свой шаблонный рисунок (18 и 36 px), macOS сама красит его под светлую и тёмную строку.
+        MenuBarExtra("What Was That!?", image: "MenuBarIcon") {
             MenuContent(desktop: delegate.desktop)
         }
         Window("what was that!? - settings", id: "settings") {

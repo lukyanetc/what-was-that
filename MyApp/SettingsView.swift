@@ -148,7 +148,7 @@ struct SettingsView: View {
                 } else {
                     Button("Allow Calendar Access") { Task { await events.requestAccess() } }
                 }
-                Text("Read-only. Google Calendar appears here if the account is added in System Settings (Internet Accounts).")
+                Text("Read-only. Google Calendar appears here if the account is added in System Settings (Internet Accounts). The arrows set priority: higher calendars come first in a day and win when an event is duplicated.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -286,10 +286,13 @@ struct SettingsView: View {
 
     private static let repoURL = URL(string: "https://github.com/lukyanetc/what-was-that")
     private static let issuesURL = URL(string: "https://github.com/lukyanetc/what-was-that/issues")
+    private static let siteURL = URL(string: "https://mlmlml.ru")
+    /// Адрес сбора на благотворительность (пока не задан).
+    private static let donateURL: URL? = nil
 
     /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
     private var aboutTab: some View {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.1"
         return VStack(spacing: 14) {
             Spacer(minLength: 0)
             Image("FaceML")
@@ -307,14 +310,26 @@ struct SettingsView: View {
                 Button("Check for Updates…") { desktop.updates.checkManually() }
                 Toggle("Check at launch", isOn: $appearance.checksUpdatesAtLaunch)
             }
-            Text("Hi, I'm Maks. I make small, quiet tools for the desktop. What Was That!? is a calendar strip that lives on your wallpaper and stays out of the way. More about me soon.")
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+            // Тексты пока заготовка (по-русски), к ним вернёмся вместе с локализацией.
+            VStack(spacing: 10) {
+                Text("Иногда ловлю себя на ощущении, что время несётся очень быстро и я не могу вспомнить, чем занимался. Тогда в голову приходит только один вопрос: Что это было?!")
+                Text("Это приложение поможет фиксировать главные события дней")
+                Text("[100% вайб-кодинг]")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 400)
             VStack(spacing: 6) {
-                link("Source on GitHub", Self.repoURL)
+                link("mlmlml.ru", Self.siteURL)
+                // Ссылки на сбор пока нет: строка без перехода, когда адрес появится, станет ссылкой.
+                if let donate = Self.donateURL {
+                    link("Пожертвовать на благотворительность", donate)
+                } else {
+                    Text("Пожертвовать на благотворительность").foregroundStyle(.secondary)
+                }
+                link("GitHub", Self.repoURL)
                 link("Report a problem", Self.issuesURL)
-                link("Notes app guide", Self.notesGuide)
-                link("Date format guide", Self.formatGuide)
             }
             Spacer(minLength: 0)
         }
@@ -623,14 +638,31 @@ struct SettingsView: View {
         }
     }
 
-    /// Список календарей в рамке с прокруткой: источники (аккаунты) заголовками, названия цветом календаря.
+    /// Календари в порядке приоритета (порядок в настройках); новые, которых в порядке ещё нет, идут в конце.
+    private var orderedCalendars: [(id: String, title: String, source: String, color: Color)] {
+        let order = appearance.eventCalendarOrder
+        return events.calendars.enumerated().sorted { a, b in
+            (order.firstIndex(of: a.element.id) ?? order.count + a.offset)
+                < (order.firstIndex(of: b.element.id) ?? order.count + b.offset)
+        }.map(\.element)
+    }
+
+    /// Сдвигает календарь выше или ниже по приоритету.
+    private func moveCalendar(_ id: String, by step: Int) {
+        var ids = orderedCalendars.map(\.id)
+        guard let index = ids.firstIndex(of: id), ids.indices.contains(index + step) else { return }
+        ids.swapAt(index, index + step)
+        appearance.eventCalendarOrder = ids
+    }
+
+    /// Список календарей в рамке с прокруткой в порядке приоритета: галочка, название цветом календаря, аккаунт
+    /// серым и стрелки вверх и вниз (выше в списке значит выше в ленте и побеждает при дубликатах).
     private var calendarList: some View {
-        let groups = Dictionary(grouping: events.calendars, by: \.source).sorted { $0.key < $1.key }
+        let calendars = orderedCalendars
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(groups, id: \.key) { source, calendars in
-                    Text(source).bold()
-                    ForEach(calendars, id: \.id) { calendar in
+                ForEach(calendars, id: \.id) { calendar in
+                    HStack(spacing: 8) {
                         Toggle(isOn: Binding(
                             get: { appearance.eventCalendarIDs.contains(calendar.id) },
                             set: { isOn in
@@ -641,7 +673,17 @@ struct SettingsView: View {
                             Text(calendar.title).bold().foregroundStyle(calendar.color)
                         }
                         .toggleStyle(.checkbox)
+                        Text(calendar.source)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 4)
+                        Button("Move Up", systemImage: "chevron.up") { moveCalendar(calendar.id, by: -1) }
+                            .disabled(calendar.id == calendars.first?.id)
+                        Button("Move Down", systemImage: "chevron.down") { moveCalendar(calendar.id, by: 1) }
+                            .disabled(calendar.id == calendars.last?.id)
                     }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
                 }
             }
             .padding(10)

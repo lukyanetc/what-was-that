@@ -164,6 +164,10 @@ enum NoteApp: String, CaseIterable {
     var weekGap: Bool { didSet { UserDefaults.standard.set(weekGap, forKey: "weekGap") } }
     /// Как показывать события календаря и из каких календарей (идентификаторы EventKit).
     var eventsMode: EventsMode { didSet { UserDefaults.standard.set(eventsMode.rawValue, forKey: "eventsMode") } }
+    /// Приоритет календарей (порядок в списке настроек): идентификаторы, первый показывается выше.
+    var eventCalendarOrder: [String] {
+        didSet { UserDefaults.standard.set(eventCalendarOrder, forKey: "eventCalendarOrder") }
+    }
     var eventCalendarIDs: Set<String> {
         didSet { UserDefaults.standard.set(Array(eventCalendarIDs), forKey: "eventCalendarIDs") }
     }
@@ -256,6 +260,7 @@ enum NoteApp: String, CaseIterable {
         weekGap = defaults.object(forKey: "weekGap") as? Bool ?? true
         eventsMode = defaults.string(forKey: "eventsMode").flatMap { EventsMode(rawValue: $0) } ?? .hide
         eventCalendarIDs = Set(defaults.stringArray(forKey: "eventCalendarIDs") ?? [])
+        eventCalendarOrder = defaults.stringArray(forKey: "eventCalendarOrder") ?? []
         noteApp = defaults.string(forKey: "noteApp").flatMap { NoteApp(rawValue: $0) } ?? .obsidian
         obsidianVault = defaults.string(forKey: "obsidianVault") ?? ""
         obsidianFolder = defaults.string(forKey: "obsidianFolder") ?? ""

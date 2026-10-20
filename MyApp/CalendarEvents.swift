@@ -23,6 +23,8 @@ struct CalendarEvent: Identifiable {
     let isAllDay: Bool
     /// Цвет календаря события.
     let color: Color
+    /// Приоритет календаря (0 — самый важный): им решается порядок событий с одним временем и какая копия остаётся.
+    let rank: Int
 }
 
 /// События системного календаря Mac через EventKit. Google Calendar виден здесь, если аккаунт добавлен в системные настройки.
@@ -37,6 +39,8 @@ struct CalendarEvent: Identifiable {
     @ObservationIgnored private let store = EKEventStore()
     @ObservationIgnored private var range: ClosedRange<Date>?
     @ObservationIgnored private var calendarIDs: Set<String> = []
+    /// Приоритет календарей: идентификаторы по порядку (первый важнее). Остальные идут после них.
+    @ObservationIgnored private var order: [String] = []
     @ObservationIgnored private var observer: NSObjectProtocol?
 
     /// Запрашивает доступ (системный диалог появляется один раз) и обновляет список календарей.
@@ -65,15 +69,17 @@ struct CalendarEvent: Identifiable {
     }
 
     /// Загружает события выбранных календарей за диапазон дней ленты (границы — начало первого и конец последнего дня).
-    func load(days: [Date], calendarIDs: Set<String>) {
+    func load(days: [Date], calendarIDs: Set<String>, order: [String]) {
         guard let first = days.first, let last = days.last else { return }
         let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last
         let newRange = first...end
-        // Тот же диапазон и те же календари: выборка уже на месте. Выход в scroll и обновление ленты больше не читают
-        // события заново (запрос за три года идёт в главном потоке); правки в календаре приходят через EKEventStoreChanged.
-        guard newRange != range || calendarIDs != self.calendarIDs else { return }
+        // Тот же диапазон, те же календари и тот же приоритет: выборка уже на месте. Выход в scroll и обновление ленты
+        // больше не читают события заново (запрос за три года идёт в главном потоке); правки в календаре приходят
+        // через EKEventStoreChanged.
+        guard newRange != range || calendarIDs != self.calendarIDs || order != self.order else { return }
         range = newRange
         self.calendarIDs = calendarIDs
+        self.order = order
         reload()
     }
 
@@ -86,13 +92,16 @@ struct CalendarEvent: Identifiable {
         let calendar = Calendar.current
         // Одно и то же событие бывает сразу в нескольких календарях (например, приглашение в Google и копия в iCloud):
         // событие с тем же названием, началом и концом показывается один раз.
+        // Копия из более приоритетного календаря идёт первой и остаётся (цвет кружка тоже от неё).
+        let ranks = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        func rank(_ event: EKEvent) -> Int { ranks[event.calendar.calendarIdentifier] ?? order.count }
         var seen: Set<String> = []
-        for event in store.events(matching: predicate) {
+        for event in store.events(matching: predicate).sorted(by: { rank($0) < rank($1) }) {
             let id = "\(event.title ?? "")|\(event.startDate.timeIntervalSince1970)|\(event.endDate.timeIntervalSince1970)|\(event.isAllDay)"
             guard seen.insert(id).inserted else { continue }
             let item = CalendarEvent(id: id, title: event.title ?? "", start: event.startDate, end: event.endDate,
                                      isAllDay: event.isAllDay,
-                                     color: event.calendar.cgColor.map { Color(cgColor: $0) } ?? .gray)
+                                     color: event.calendar.cgColor.map { Color(cgColor: $0) } ?? .gray, rank: rank(event))
             // Многодневное событие попадает в каждый свой день. Конец у событий «до полуночи» не включается.
             var day = calendar.startOfDay(for: event.startDate)
             repeat {
@@ -100,7 +109,13 @@ struct CalendarEvent: Identifiable {
                 day = calendar.date(byAdding: .day, value: 1, to: day) ?? .distantFuture
             } while day < event.endDate && day <= range.upperBound
         }
-        byDay = result.mapValues { $0.sorted { $0.isAllDay != $1.isAllDay ? $0.isAllDay : $0.start < $1.start } }
+        // Сначала события на весь день, потом по времени начала; при одинаковом времени выше приоритетный календарь.
+        byDay = result.mapValues {
+            $0.sorted {
+                if $0.isAllDay != $1.isAllDay { return $0.isAllDay }
+                return $0.start != $1.start ? $0.start < $1.start : $0.rank < $1.rank
+            }
+        }
     }
 
     /// События дня с учётом режима. В режиме «только будущие» прошедшие события не возвращаются, а считаются в `hidden`.

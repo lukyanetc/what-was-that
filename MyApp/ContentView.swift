@@ -130,6 +130,7 @@ struct ContentView: View {
             // Настройки календаря: режим, выбранные календари, выданный доступ.
             .onChange(of: desktop.appearance.eventsMode) { loadEvents() }
             .onChange(of: desktop.appearance.eventCalendarIDs) { loadEvents() }
+            .onChange(of: desktop.appearance.eventCalendarOrder) { loadEvents() }
             .onChange(of: desktop.events.isAuthorized) { loadEvents() }
             // Сменился идущий период (правка списка, начало или конец) или его место в окне: лента встаёт заново.
             .onChange(of: activePeriodStart) { restorePosition(proxy) }
@@ -231,7 +232,13 @@ struct ContentView: View {
         .modifier(PeriodSwap(isActive: desktop.appearance.viewKind == .period,
                              hidesContent: desktop.shownPeriod != nil, layer: periodLayer))
         // Без отступов сверху и снизу: лента уходит за края окна, а затухание у краёв создаёт ощущение бесконечности.
-        .mask { edgeFadeMask }
+        // К затуханию у краёв добавляется мягкое «окно» под названием режима: лента под ним прозрачна до рабочего стола,
+        // и название не сливается с текстом.
+        .mask {
+            edgeFadeMask
+                .overlay(alignment: .topTrailing) { modePlateHole }
+                .compositingGroup()
+        }
         .font(desktop.appearance.font)
         .foregroundStyle(desktop.appearance.textColor.opacity(desktop.appearance.textOpacity))
         .padding(.trailing)
@@ -313,8 +320,8 @@ struct ContentView: View {
 
     /// Режим в правом верхнем углу: появляется сразу при смене режима. Горит в scroll, edit и move;
     /// locked показывается секунду и плавно гаснет.
-    private var modeIndicator: some View {
-        // Промежуток в полпробела, а знак «>» опущен на пару пунктов, чтобы стоять по центру строчных букв.
+    /// Строка «> режим»: промежуток в полпробела, а знак «>» опущен на пару пунктов, чтобы стоять по центру строчных букв.
+    private var modeLabel: some View {
         HStack(spacing: 4) {
             Text(">").baselineOffset(-1)
             // Невидимое «scroll» (самое длинное слово) задаёт ширину: «>» стоит на месте, слово меняется за ним.
@@ -324,10 +331,40 @@ struct ContentView: View {
             }
         }
         .font(desktop.appearance.font)
+    }
+
+    /// Отступ строки режима сверху. Лента: ниже строки меню, окно уходит под неё. Месяц и неделя: окно небольшое.
+    private var modeTopInset: Double { desktop.isCompact ? 8 : 56 }
+
+    /// Прозрачное «окно» в маске ленты под строкой режима: ровный прямоугольник с небольшим скруглением, вырезает ленту
+    /// до рабочего стола. Подгоняется под слово: начинается от «>» (он стоит на месте) и кончается за словом режима.
+    /// Положение задаёт невидимая строка `modeLabel` той же ширины, что и настоящая, а плашка рисуется за ней.
+    /// Гаснет вместе с самим названием.
+    private var modePlateHole: some View {
+        modeLabel
+            .foregroundStyle(.clear)
+            .background(alignment: .leading) {
+                HStack(spacing: 4) {
+                    Text(">").baselineOffset(-1)
+                    Text(desktop.mode.rawValue)
+                }
+                .font(desktop.appearance.font)
+                .foregroundStyle(.clear)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.black))
+                .padding(.leading, -10)
+            }
+            .padding(.top, modeTopInset)
+            .blendMode(.destinationOut)
+            .opacity(isIndicatorVisible ? 1 : 0)
+    }
+
+    private var modeIndicator: some View {
+        modeLabel
         .foregroundStyle(desktop.appearance.textColor)
         .padding(.horizontal)
-        // Лента: ниже строки меню, окно уходит под неё. Месяц и неделя: окно небольшое и стоит где угодно.
-        .padding(.top, desktop.isCompact ? 8 : 56)
+        .padding(.top, modeTopInset)
         .opacity(isIndicatorVisible ? 0.5 : 0)
         .task(id: desktop.mode) {
             isIndicatorVisible = true
@@ -459,7 +496,7 @@ struct ContentView: View {
     /// Загружает события календаря за дни ленты (в режиме «Не показывать» ничего не читается).
     private func loadEvents() {
         let ids = desktop.appearance.eventsMode == .hide ? [] : desktop.appearance.eventCalendarIDs
-        desktop.events.load(days: days, calendarIDs: ids)
+        desktop.events.load(days: days, calendarIDs: ids, order: desktop.appearance.eventCalendarOrder)
     }
 
     /// Запись в ленте (locked, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.

@@ -301,6 +301,9 @@ final class DesktopWindow: NSWindow {
             MainActor.assumeIsolated {
                 guard let self, self.mode == .edit, let editor = note.object as? NSTextView,
                       editor.isFieldEditor, editor.window === self.window else { return }
+                // Выделение полупрозрачное цветом текста: буквы рисует слой под полем, а обычное непрозрачное выделение
+                // их закрывало, и выделенный текст не был виден.
+                editor.selectedTextAttributes = [.backgroundColor: NSColor(self.appearance.textColor).withAlphaComponent(0.3)]
                 let range = editor.selectedRange()
                 guard range.length > 0, range.length == editor.string.utf16.count,
                       Date.now.timeIntervalSince(self.lastUserInput) > 0.3 else { return }
@@ -333,6 +336,7 @@ final class DesktopWindow: NSWindow {
         collapseSelection()
         // Текст поля прозрачен (буквы рисует Text поверх него), а курсор по умолчанию берёт цвет текста: задаём явно.
         editor.insertionPointColor = NSColor(appearance.textColor)
+        editor.selectedTextAttributes = [.backgroundColor: NSColor(appearance.textColor).withAlphaComponent(0.3)]
         editor.updateInsertionPointStateAndRestartTimer(true)
         editor.needsDisplay = true
         return true
