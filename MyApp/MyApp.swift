@@ -21,7 +21,7 @@ private struct MenuContent: View {
         // Заголовки это обычные строки, а не Section и не Picker: те сами рисуют разделители вокруг своих пунктов.
         Text("Mode · \(desktop.appearance.hotKeyLabel), Esc → locked")
         ForEach(Mode.allCases, id: \.self) { mode in
-            Toggle(mode.rawValue.capitalized, isOn: Binding(get: { desktop.mode == mode }, set: { _ in desktop.mode = mode }))
+            Toggle(mode.rawValue, isOn: Binding(get: { desktop.mode == mode }, set: { _ in desktop.mode = mode }))
         }
         Divider()
         Text("View")
@@ -54,7 +54,7 @@ private struct MenuContent: View {
         }
         Button("Check for Updates…") { desktop.updates.checkManually() }
         Divider()
-        Button("Quit What Was That!?") { NSApp.terminate(nil) }
+        Button("Quit what was that!?") { NSApp.terminate(nil) }
     }
 }
 
@@ -63,7 +63,7 @@ private struct MenuContent: View {
 
     var body: some Scene {
         // Значок в строке меню: свой шаблонный рисунок (18 и 36 px), macOS сама красит его под светлую и тёмную строку.
-        MenuBarExtra("What Was That!?", image: "MenuBarIcon") {
+        MenuBarExtra("what was that!?", image: "MenuBarIcon") {
             MenuContent(desktop: delegate.desktop)
         }
         Window("what was that!? - settings", id: "settings") {

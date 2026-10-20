@@ -121,7 +121,7 @@ extension Appearance {
         do {
             try applySettings(Data(contentsOf: url))
         } catch {
-            Export.alert("Could not load the settings", "The file doesn't look like What Was That!? settings.")
+            Export.alert("Could not load the settings", "The file doesn't look like what was that!? settings.")
         }
     }
 }

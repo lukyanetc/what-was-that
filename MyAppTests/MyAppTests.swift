@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreGraphics
+import AppKit
 @testable import d_cal
 
 struct DayStoreTests {

@@ -294,57 +294,70 @@ struct SettingsView: View {
 
     // MARK: About
 
-    private static let repoURL = URL(string: "https://github.com/lukyanetc/what-was-that")
-    private static let issuesURL = URL(string: "https://github.com/lukyanetc/what-was-that/issues")
-    private static let siteURL = URL(string: "https://mlmlml.ru")
-    /// Адрес сбора на благотворительность (пока не задан).
-    private static let donateURL: URL? = nil
 
     /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
     private var aboutTab: some View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.1"
-        return VStack(spacing: 14) {
-            Spacer(minLength: 0)
-            Image("FaceML")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 150)
-                .padding(12)
-                // Рисунок чёрными линиями: на белой плашке он читается и в тёмной теме.
-                .background(.white, in: RoundedRectangle(cornerRadius: 16))
-            Text("What Was That!?").font(.title2.bold())
-            Text("Version \(version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
-                Button("Check for Updates…") { desktop.updates.checkManually() }
-                Toggle("Check at launch", isOn: $appearance.checksUpdatesAtLaunch)
-            }
-            // Тексты пока заготовка (по-русски), к ним вернёмся вместе с локализацией.
-            VStack(spacing: 10) {
-                Text("Иногда ловлю себя на ощущении, что время несётся очень быстро и я не могу вспомнить, чем занимался. Тогда в голову приходит только один вопрос: Что это было?!")
-                Text("Это приложение поможет фиксировать главные события дней")
-                Text("[100% вайб-кодинг]")
+        // Тексты и ссылки лежат в AboutContent.swift: там их и править. Всё помещается в окно (тексты переносятся
+        // по строкам), а если не поместится, закладка прокручивается.
+        return ScrollView {
+            VStack(spacing: 14) {
+                // Значок приложения главный: крупный и с большим отступом, всё остальное ниже.
+                Image("AboutIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 192, height: 192)
+                    .padding(.top, 8)
+                    .padding(.bottom, 22)
+                // Вступление серым, по центру, переносы строк расставлены вручную в AboutContent.
+                Text(AboutContent.intro.joined(separator: "\n"))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                VStack(spacing: 4) {
+                    Text(AboutContent.title).font(.title2.bold())
+                    HStack(spacing: 8) {
+                        Text("Version \(version)")
+                        if let tag = AboutContent.tag { Text(tag) }
+                    }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: 400)
-            VStack(spacing: 6) {
-                link("mlmlml.ru", Self.siteURL)
-                // Ссылки на сбор пока нет: строка без перехода, когда адрес появится, станет ссылкой.
-                if let donate = Self.donateURL {
-                    link("Пожертвовать на благотворительность", donate)
-                } else {
-                    Text("Пожертвовать на благотворительность").foregroundStyle(.secondary)
                 }
-                link("GitHub", Self.repoURL)
-                link("Report a problem", Self.issuesURL)
+                // Продолжение серым, в одну строку.
+                Text(AboutContent.outro)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                // Обновления над ссылками: кнопка и проверка при запуске (в меню тоже есть «Check for Updates…»).
+                HStack(spacing: 12) {
+                    Button("Check for Updates…") { desktop.updates.checkManually() }
+                    Toggle("Check at launch", isOn: $appearance.checksUpdatesAtLaunch)
+                }
+                .font(.caption)
+                .padding(.top, 6)
+                // Ссылки в одну строку, ниже серая подчёркнутая «Report a problem».
+                HStack(spacing: 20) {
+                    ForEach(AboutContent.links, id: \.title) { item in
+                        if let url = item.url.flatMap({ URL(string: $0) }) {
+                            link(item.title, url)
+                        } else {
+                            Text(item.title).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let url = URL(string: AboutContent.reportURL) {
+                    // Кнопка без оформления, а не Link: ссылка перекрашивает подпись в цвет выделения, а нужен серый.
+                    Button { NSWorkspace.shared.open(url) } label: {
+                        Text(AboutContent.reportTitle).underline().foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .frame(maxWidth: .infinity)
-        .padding()
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     /// Ссылка: синяя и подчёркнутая, как «Format info».
