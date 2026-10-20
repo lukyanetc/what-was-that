@@ -76,18 +76,31 @@ struct CalendarEvent: Identifiable {
         // Тот же диапазон, те же календари и тот же приоритет: выборка уже на месте. Выход в scroll и обновление ленты
         // больше не читают события заново (запрос за три года идёт в главном потоке); правки в календаре приходят
         // через EKEventStoreChanged.
-        guard newRange != range || calendarIDs != self.calendarIDs || order != self.order else { return }
+        let sameQuery = newRange == range && calendarIDs == self.calendarIDs
+        guard !sameQuery || order != self.order else { return }
         range = newRange
         self.calendarIDs = calendarIDs
         self.order = order
-        reload()
+        // Сменился только приоритет (перетаскивание в настройках): события уже прочитаны, их достаточно переразложить
+        // без нового запроса к EventKit, который был причиной задержки при перетаскивании.
+        if sameQuery { rebuild() } else { reload() }
     }
 
+    /// События, прочитанные из EventKit последним запросом (до разбора по дням и дубликатам).
+    @ObservationIgnored private var fetched: [EKEvent] = []
+
     private func reload() {
-        guard isAuthorized, let range, !calendarIDs.isEmpty else { byDay = [:]; return }
+        guard isAuthorized, let range, !calendarIDs.isEmpty else { fetched = []; byDay = [:]; return }
         let selected = store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
-        guard !selected.isEmpty else { byDay = [:]; return }
+        guard !selected.isEmpty else { fetched = []; byDay = [:]; return }
         let predicate = store.predicateForEvents(withStart: range.lowerBound, end: range.upperBound, calendars: selected)
+        fetched = store.events(matching: predicate)
+        rebuild()
+    }
+
+    /// Раскладывает прочитанные события по дням: убирает дубликаты и сортирует с учётом приоритета календарей.
+    private func rebuild() {
+        guard let range else { return }
         var result: [String: [CalendarEvent]] = [:]
         let calendar = Calendar.current
         // Одно и то же событие бывает сразу в нескольких календарях (например, приглашение в Google и копия в iCloud):
@@ -96,7 +109,7 @@ struct CalendarEvent: Identifiable {
         let ranks = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         func rank(_ event: EKEvent) -> Int { ranks[event.calendar.calendarIdentifier] ?? order.count }
         var seen: Set<String> = []
-        for event in store.events(matching: predicate).sorted(by: { rank($0) < rank($1) }) {
+        for event in fetched.sorted(by: { rank($0) < rank($1) }) {
             let id = "\(event.title ?? "")|\(event.startDate.timeIntervalSince1970)|\(event.endDate.timeIntervalSince1970)|\(event.isAllDay)"
             guard seen.insert(id).inserted else { continue }
             let item = CalendarEvent(id: id, title: event.title ?? "", start: event.startDate, end: event.endDate,

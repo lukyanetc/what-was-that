@@ -142,13 +142,23 @@ struct SettingsView: View {
                 }
                 if events.isAuthorized {
                     // При Hide выбор календарей не нужен: список неактивен.
-                    calendarList
+                    CalendarListView(appearance: appearance, events: events)
                         .disabled(appearance.eventsMode == .hide)
                         .opacity(appearance.eventsMode == .hide ? 0.5 : 1)
                 } else {
-                    Button("Allow Calendar Access") { Task { await events.requestAccess() } }
+                    Button("Allow Calendar Access") {
+                        Task {
+                            await events.requestAccess()
+                            // Системный запрос забирает фокус у приложения, и окно настроек уходило из виду:
+                            // после ответа возвращаем его на передний план.
+                            NSApp.activate()
+                            for window in NSApp.windows where window.title == "what was that!? - settings" {
+                                window.makeKeyAndOrderFront(nil)
+                            }
+                        }
+                    }
                 }
-                Text("Read-only. Google Calendar appears here if the account is added in System Settings (Internet Accounts). The arrows set priority: higher calendars come first in a day and win when an event is duplicated.")
+                Text("Read-only. Google Calendar appears here if the account is added in System Settings (Internet Accounts). Drag calendars to set priority: higher ones come first in a day and win when an event is duplicated.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -638,60 +648,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Календари в порядке приоритета (порядок в настройках); новые, которых в порядке ещё нет, идут в конце.
-    private var orderedCalendars: [(id: String, title: String, source: String, color: Color)] {
-        let order = appearance.eventCalendarOrder
-        return events.calendars.enumerated().sorted { a, b in
-            (order.firstIndex(of: a.element.id) ?? order.count + a.offset)
-                < (order.firstIndex(of: b.element.id) ?? order.count + b.offset)
-        }.map(\.element)
-    }
-
-    /// Сдвигает календарь выше или ниже по приоритету.
-    private func moveCalendar(_ id: String, by step: Int) {
-        var ids = orderedCalendars.map(\.id)
-        guard let index = ids.firstIndex(of: id), ids.indices.contains(index + step) else { return }
-        ids.swapAt(index, index + step)
-        appearance.eventCalendarOrder = ids
-    }
-
-    /// Список календарей в рамке с прокруткой в порядке приоритета: галочка, название цветом календаря, аккаунт
-    /// серым и стрелки вверх и вниз (выше в списке значит выше в ленте и побеждает при дубликатах).
-    private var calendarList: some View {
-        let calendars = orderedCalendars
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(calendars, id: \.id) { calendar in
-                    HStack(spacing: 8) {
-                        Toggle(isOn: Binding(
-                            get: { appearance.eventCalendarIDs.contains(calendar.id) },
-                            set: { isOn in
-                                if isOn { appearance.eventCalendarIDs.insert(calendar.id) }
-                                else { appearance.eventCalendarIDs.remove(calendar.id) }
-                            })
-                        ) {
-                            Text(calendar.title).bold().foregroundStyle(calendar.color)
-                        }
-                        .toggleStyle(.checkbox)
-                        Text(calendar.source)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 4)
-                        Button("Move Up", systemImage: "chevron.up") { moveCalendar(calendar.id, by: -1) }
-                            .disabled(calendar.id == calendars.first?.id)
-                        Button("Move Down", systemImage: "chevron.down") { moveCalendar(calendar.id, by: 1) }
-                            .disabled(calendar.id == calendars.last?.id)
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 170)
-        .background(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
-    }
 }
 
 /// Поле записи глобального хоткея: по нажатию ждёт комбинацию (минимум один модификатор), Esc отменяет.

@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var dirty: Set<String> = []
     /// Что не так с файлом данных (повреждён, скачивается, не записывается); nil — всё в порядке. Показывается в углу окна.
     @State private var dataProblem: String?
+    /// Отложенное переразложение событий после смены приоритета календарей.
+    @State private var orderTask: Task<Void, Never>?
     /// Отложенная запись текста, см. `scheduleSave`.
     @State private var saveTask: Task<Void, Never>?
     /// Время изменения файла при последнем чтении: по нему замечаем правки с другого Mac (iCloud).
@@ -130,7 +132,16 @@ struct ContentView: View {
             // Настройки календаря: режим, выбранные календари, выданный доступ.
             .onChange(of: desktop.appearance.eventsMode) { loadEvents() }
             .onChange(of: desktop.appearance.eventCalendarIDs) { loadEvents() }
-            .onChange(of: desktop.appearance.eventCalendarOrder) { loadEvents() }
+            // Приоритет календарей меняется перетаскиванием в настройках: события переразбираются чуть позже, когда
+            // перетаскивание уже закончилось (иначе картинка строки висит на экране, пока лента перерисовывается).
+            .onChange(of: desktop.appearance.eventCalendarOrder) {
+                orderTask?.cancel()
+                orderTask = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    loadEvents()
+                }
+            }
             .onChange(of: desktop.events.isAuthorized) { loadEvents() }
             // Сменился идущий период (правка списка, начало или конец) или его место в окне: лента встаёт заново.
             .onChange(of: activePeriodStart) { restorePosition(proxy) }
