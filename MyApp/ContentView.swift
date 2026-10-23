@@ -423,7 +423,11 @@ struct ContentView: View {
                     if overlaysText {
                         // Высоту строки задаёт тот же Text, что и в locked, а поле лежит поверх и на размер не влияет:
                         // поле чуть выше текста, и строки ленты (вместе с событиями под ними) сдвигались при входе в edit.
-                        recordText(AttributedString(text))
+                        // Пустые строки (после Shift/Cmd/Opt+Enter) рисуются пробелом: Text с «пустой» строкой ниже
+                        // обычной и не растёт вместе с полем, из-за чего дата сдвигалась, пока не появятся буквы.
+                        let padded = text.split(separator: "\n", omittingEmptySubsequences: false)
+                            .map { $0.isEmpty ? " " : String($0) }.joined(separator: "\n")
+                        recordText(AttributedString(padded))
                             .allowsHitTesting(false)
                             .overlay(alignment: .topLeading) { field }
                     } else {

@@ -342,7 +342,13 @@ struct SettingsView: View {
                 }
                 .font(.caption)
                 .padding(.top, 6)
-                // Ссылки в одну строку, ниже серая подчёркнутая «Report a problem».
+                // Над ссылками: «Inspired by this video».
+                HStack(spacing: 4) {
+                    Text(AboutContent.inspiredText).foregroundStyle(.secondary)
+                    link(AboutContent.inspiredLinkTitle, URL(string: AboutContent.inspiredURL))
+                }
+                .padding(.top, 6)
+                // Ссылки в одну строку.
                 HStack(spacing: 20) {
                     ForEach(AboutContent.links, id: \.title) { item in
                         if let url = item.url.flatMap({ URL(string: $0) }) {
@@ -351,13 +357,6 @@ struct SettingsView: View {
                             Text(item.title).foregroundStyle(.secondary)
                         }
                     }
-                }
-                if let url = URL(string: AboutContent.reportURL) {
-                    // Кнопка без оформления, а не Link: ссылка перекрашивает подпись в цвет выделения, а нужен серый.
-                    Button { NSWorkspace.shared.open(url) } label: {
-                        Text(AboutContent.reportTitle).underline().foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
             .frame(maxWidth: .infinity)
