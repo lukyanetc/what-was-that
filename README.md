@@ -1,4 +1,4 @@
-*Days fly by, and sometimes one question comes to mind: what was that?!*
+<p align="center">Days fly by, and sometimes one question comes to mind: what was that?!</p>
 
 <p align="center">
   <img src="MyApp/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="What Was That!? icon">
