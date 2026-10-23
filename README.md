@@ -30,12 +30,6 @@ One entry per day, to remember or plan what matters.
 - **Always there.** Starts at login by default; turn it off in Settings → General.
 - **No accounts, no servers.** Everything is stored in plain JSON in your Documents folder. Export all your entries anytime.
 
-## Screenshot
-
-
-<p align="center"><img src="screenshot.png" width="800" alt="What Was That!? on the desktop"></p>
-
-
 
   ```json
   {
@@ -45,6 +39,11 @@ One entry per day, to remember or plan what matters.
   ```
 
 - You can put the file in iCloud Drive to sync between Macs.
+
+## Screenshot
+
+
+<p align="center"><img src="screenshot.png" width="800" alt="What Was That!? on the desktop"></p>
 
 ## Install
 
