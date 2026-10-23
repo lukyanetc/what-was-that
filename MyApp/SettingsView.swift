@@ -1,7 +1,7 @@
 import SwiftUI
 import Carbon.HIToolbox
 
-/// Окно настроек: четыре закладки (General, Ranges, Appearance, Notes).
+/// Settings window: tabs (General, Ranges, Appearance, Notes, About).
 struct SettingsView: View {
     let desktop: DesktopController
     @Bindable private var appearance: Appearance
@@ -13,30 +13,30 @@ struct SettingsView: View {
 
     private var events: CalendarEvents { desktop.events }
 
-    /// Новый диапазон, пока он не добавлен: название и срок (по умолчанию неделя с сегодняшнего дня).
-    /// Выбранная закладка.
+    /// A new range until it is added: name and span (a week starting today by default).
+    /// The selected tab.
     @State private var tab = Tab.general
     @State private var startsAtLogin = LoginItem.isEnabled
-    /// Диапазон в списке, который сейчас правится (остальные показаны текстом).
+    /// The range in the list that is being edited now (the others are shown as text).
     @State private var editingRangeID: UUID?
     @State private var frozenRangeOrder: [UUID]?
-    /// Высота содержимого списка диапазонов (по ней считается высота рамки).
+    /// Height of the ranges list content (the frame height is computed from it).
     @State private var rangeListContentHeight = 0.0
     @State private var draftName = ""
     @State private var draftStart = Calendar.current.startOfDay(for: .now)
     @State private var draftEnd = Calendar.current.date(byAdding: .day, value: 6, to: Calendar.current.startOfDay(for: .now)) ?? .now
 
-    /// Подсказки по подключению заметочников лежат в репозитории (docs/NOTES.md).
+    /// Hints for connecting notes apps are in the repository (docs/NOTES.md).
     private static let notesGuide = URL(string: "https://github.com/lukyanetc/what-was-that/blob/main/docs/NOTES.md")
 
-    /// Какие обозначения формата даты поддерживаются, лежит в репозитории (docs/DATE_FORMATS.md).
+    /// Which date format tokens are supported is in the repository (docs/DATE_FORMATS.md).
     private static let formatGuide = URL(string: "https://github.com/lukyanetc/what-was-that/blob/main/docs/DATE_FORMATS.md")
 
     private static let datePresets = ["DD ddd", "ddd DD", "DD.MM", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     private static let monthPresets = ["MMMM YYYY", "MMMM", "MMM YY", "YYYY-MM"]
 
     var body: some View {
-        // Закладки внизу окна, а не сверху: сверху остаётся свободный заголовок, за который удобно таскать окно.
+        // Tabs at the bottom of the window, not at the top: the top stays a free title area that is handy for dragging the window.
         VStack(spacing: 0) {
             switch tab {
             case .general: generalTab
@@ -64,9 +64,9 @@ struct SettingsView: View {
             }
             .padding(8)
         }
-        // Моноширинный стиль, как у ленты.
+        // Monospaced style, like the feed.
         .fontDesign(.monospaced)
-        // Строка ползунка: название 96 + значение 120 + ползунок 260 pt и отступы формы.
+        // Slider row: title 96 + value 120 + slider 260 pt and the form's padding.
         .frame(width: 560, height: 580)
     }
 
@@ -116,7 +116,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            // День → месяц → неделя: один блок. Пример стоит сразу после названия, до поля ввода.
+            // Day → month → week: one block. The example comes right after the title, before the input field.
             Section("Date Format") {
                 formatRow("Day", example: appearance.dayText(.now), text: $appearance.dateFormat,
                           presets: Self.datePresets)
@@ -148,7 +148,7 @@ struct SettingsView: View {
                     ForEach(EventsMode.allCases, id: \.self) { Text($0.title) }
                 }
                 if events.isAuthorized {
-                    // При Hide выбор календарей не нужен: список неактивен.
+                    // With Hide, calendar selection is not needed: the list is inactive.
                     CalendarListView(appearance: appearance, events: events)
                         .disabled(appearance.eventsMode == .hide)
                         .opacity(appearance.eventsMode == .hide ? 0.5 : 1)
@@ -156,8 +156,8 @@ struct SettingsView: View {
                     Button("Allow Calendar Access") {
                         Task {
                             await events.requestAccess()
-                            // Системный запрос забирает фокус у приложения, и окно настроек уходило из виду:
-                            // после ответа возвращаем его на передний план.
+                            // The system request takes focus from the app, and the settings window used to go out of sight:
+                            // after the answer we bring it back to the front.
                             NSApp.activate()
                             for window in NSApp.windows where window.title == "what was that!? - settings" {
                                 window.makeKeyAndOrderFront(nil)
@@ -196,9 +196,9 @@ struct SettingsView: View {
     private var rangesTab: some View {
         Form {
             Section {
-                // Одна строка: название, срок, кнопка. Новый диапазон попадает в список ниже.
+                // One row: name, span, button. The new range lands in the list below.
                 HStack(spacing: 8) {
-                    // Подсказка «Name» внутри поля (prompt), а не отдельной подписью слева: в Form подпись поля выводится словом.
+                    // The "Name" hint inside the field (prompt), not a separate label on the left: in a Form a field's label is shown as a word.
                     TextField("", text: $draftName, prompt: Text("Name"))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
@@ -222,7 +222,7 @@ struct SettingsView: View {
                     }
                     .disabled(draftName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                // Список виден всегда: пустой показывает одну строку «Empty».
+                // The list is always visible: an empty one shows a single "Empty" row.
                 rangeList
                 if !appearance.periods.isEmpty {
                     HStack {
@@ -270,7 +270,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Window") {
-                // Ширина: Width → поле для ручного ввода → px → счётчик со стрелками → ползунок.
+                // Width: Width → manual input field → px → stepper → slider.
                 sliderRow("Width", value: widthBinding, in: Appearance.widthRange, step: 10) {
                     HStack(spacing: 6) {
                         TextField("", value: widthBinding, format: .number.grouping(.never))
@@ -283,8 +283,8 @@ struct SettingsView: View {
                             .labelsHidden()
                     }
                 }
-                // Без числа и без шага (шаг рисует риски на ползунке): затухание подбирается на глаз.
-                // Пустой текст, а не EmptyView: у пустого вида рамка колонки значения игнорируется, и ползунок съезжал влево.
+                // No number and no step (the step draws ticks on the slider): the fade is tuned by eye.
+                // Empty text, not EmptyView: an empty view ignores the value column's frame, and the slider shifted left.
                 sliderRow("Edge fade", value: $appearance.edgeFade, in: 0...150) { Text("") }
                 Text("Fades the feed at the top and bottom of the screen. Works only when the window is full height (Feed and Range views).")
                     .font(.caption)
@@ -302,21 +302,21 @@ struct SettingsView: View {
     // MARK: About
 
 
-    /// Заглушка: рисунок, название, версия, пара строк об авторе и ссылки.
+    /// Placeholder: image, title, version, a couple of lines about the author and links.
     private var aboutTab: some View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.1"
-        // Тексты и ссылки лежат в AboutContent.swift: там их и править. Всё помещается в окно (тексты переносятся
-        // по строкам), а если не поместится, закладка прокручивается.
+        // Texts and links live in AboutContent.swift: edit them there. Everything fits in the window (texts wrap
+        // by lines), and if it does not fit, the tab scrolls.
         return ScrollView {
             VStack(spacing: 14) {
-                // Значок приложения главный: крупный и с большим отступом, всё остальное ниже.
+                // The app icon is the main thing: large and with a big margin, everything else is below.
                 Image("AboutIcon")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 192, height: 192)
                     .padding(.top, 8)
                     .padding(.bottom, 22)
-                // Вступление серым, по центру, переносы строк расставлены вручную в AboutContent.
+                // Intro in gray, centered, line breaks placed by hand in AboutContent.
                 Text(AboutContent.intro.joined(separator: "\n"))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -330,25 +330,25 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-                // Продолжение серым, в одну строку.
+                // Outro in gray, on one line.
                 Text(AboutContent.outro)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
-                // Обновления над ссылками: кнопка и проверка при запуске (в меню тоже есть «Check for Updates…»).
+                // Updates above the links: a button and the check at launch (the menu also has "Check for Updates…").
                 HStack(spacing: 12) {
                     Button("Check for Updates…") { desktop.updates.checkManually() }
                     Toggle("Check at launch", isOn: $appearance.checksUpdatesAtLaunch)
                 }
                 .font(.caption)
                 .padding(.top, 6)
-                // Над ссылками: «Inspired by this video».
+                // Above the links: "Inspired by this video".
                 HStack(spacing: 4) {
                     Text(AboutContent.inspiredText).foregroundStyle(.secondary)
                     link(AboutContent.inspiredLinkTitle, URL(string: AboutContent.inspiredURL))
                 }
                 .padding(.top, 6)
-                // Ссылки в одну строку.
+                // Links in one row.
                 HStack(spacing: 20) {
                     ForEach(AboutContent.links, id: \.title) { item in
                         if let url = item.url.flatMap({ URL(string: $0) }) {
@@ -366,7 +366,7 @@ struct SettingsView: View {
         .scrollBounceBehavior(.basedOnSize)
     }
 
-    /// Ссылка: синяя и подчёркнутая, как «Format info».
+    /// Link: blue and underlined, like "Format info".
     @ViewBuilder
     private func link(_ title: String, _ url: URL?) -> some View {
         if let url {
@@ -415,7 +415,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    /// Все диапазоны в рамке с прокруткой (как список календарей): у каждого правка названия и срока и удаление.
+    /// All ranges in a scrolling frame (like the calendar list): each has editing of name and span, and deletion.
     private var rangeList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -431,20 +431,20 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: Double.self) { $0.size.height } action: { rangeListContentHeight = $0 }
         }
-        // Высота по содержимому, но не больше 200 pt: дальше включается прокрутка, и окно не растёт.
+        // Height by content, but not more than 200 pt: beyond that scrolling turns on and the window does not grow.
         .frame(height: rangeListContentHeight > 0 ? min(rangeListContentHeight, 200) : 200)
         .background(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
     }
 
-    /// Строка ползунка в одну линию: название → значение (у ширины поле и счётчик) → ползунок постоянной длины.
-    /// Колонки названия и значения одной ширины у всех строк, поэтому все ползунки стоят в одну колонку.
+    /// Slider row on one line: title → value (the width has a field and a stepper) → slider of constant length.
+    /// The title and value columns are the same width in all rows, so all sliders line up in one column.
     @ViewBuilder
     private func sliderRow<Display: View>(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
                                           step: Double? = nil, @ViewBuilder display: () -> Display) -> some View {
         HStack(spacing: 8) {
             Text(title).frame(width: 96, alignment: .leading)
             display().frame(width: 120, alignment: .leading)
-            // Без подписи: форма иначе ставит ползунок со своей подписью справа и сама задаёт ему узкую ширину.
+            // No label: otherwise the form puts the slider with its own label on the right and gives it a narrow width.
             Group {
                 if let step {
                     Slider(value: value, in: range, step: step) { EmptyView() }
@@ -458,7 +458,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Строка ползунка со значением обычным текстом («13 pt»).
+    /// Slider row with a plain text value ("13 pt").
     private func sliderRow(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
                            step: Double? = nil, shows text: String) -> some View {
         sliderRow(title, value: value, in: range, step: step) {
@@ -466,10 +466,10 @@ struct SettingsView: View {
         }
     }
 
-    /// Длина всех ползунков, pt.
+    /// Length of all sliders, pt.
     private static let sliderWidth = 260.0
 
-    /// Пример результата: мелкий серый текст, как у примеров в Date Format. Подпись в той же колонке, что у полей.
+    /// Example of the result: small gray text, like the examples in Date Format. The label is in the same column as the fields.
     private func exampleRow(_ example: String) -> some View {
         HStack(spacing: 8) {
             Text("Example").frame(width: 90, alignment: .leading)
@@ -482,7 +482,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Поле заметочника: подпись слева, поле с рамкой и серой подсказкой внутри (видно, что сюда можно вводить).
+    /// Notes app field: label on the left, a bordered field with a gray hint inside (it is clear that you can type here).
     private func noteField(_ title: String, text: Binding<String>, prompt: String) -> some View {
         HStack(spacing: 8) {
             Text(title).frame(width: 90, alignment: .leading)
@@ -492,7 +492,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Строка цвета: подпись и образец по центру одной линии (в LabeledContent подпись стояла выше образца).
+    /// Color row: label and swatch centered on one line (in LabeledContent the label sat above the swatch).
     private func colorRow(_ title: String, selection: Binding<Color>) -> some View {
         HStack(alignment: .center) {
             Text(title)
@@ -502,14 +502,14 @@ struct SettingsView: View {
         }
     }
 
-    /// Ширина окна: введённое вручную значение зажимается в допустимые границы.
+    /// Window width: a manually entered value is clamped to valid bounds.
     private var widthBinding: Binding<Double> {
         Binding(
             get: { appearance.width },
             set: { appearance.width = min(max($0, Appearance.widthRange.lowerBound), Appearance.widthRange.upperBound) })
     }
 
-    /// Линия «сегодня»: цвет без прозрачности и отдельная прозрачность. Пока ничего не выбрано, это цвет текста с 15%.
+    /// "Today" line: color without opacity and a separate opacity. While nothing is chosen, it is the text color at 15%.
     private var highlightAlpha: Double { Double(NSColor(appearance.highlightColor).alphaComponent) }
 
     private var highlightColorBinding: Binding<Color> {
@@ -526,8 +526,8 @@ struct SettingsView: View {
             })
     }
 
-    /// Диапазоны по дате начала (при равном начале сначала короткий); прошедшие остаются на своём месте.
-    /// Порядок меняется только в показе, в настройках и в файле он прежний. Пока правится строка, порядок заморожен.
+    /// Ranges by start date (on equal start the shorter first); past ones stay in their place.
+    /// The order changes only in display; in settings and in the file it stays the same. While a row is being edited, the order is frozen.
     private var orderedPeriods: [Period] {
         let calendar = Calendar.current
         let sorted = appearance.periods.sorted {
@@ -540,14 +540,14 @@ struct SettingsView: View {
         return kept + sorted.filter { period in !frozen.contains(period.id) }
     }
 
-    /// Правка закончена: строка встаёт на место по новым датам.
+    /// Editing is done: the row takes its place by the new dates.
     private func stopEditingRange() {
         editingRangeID = nil
         frozenRangeOrder = nil
     }
 
-    /// Ширина колонки названий в списке диапазонов, pt: постоянная, чтобы сроки стояли на одном месте и окно не менялось.
-    /// Название, которое в неё не помещается, обрезается многоточием.
+    /// Width of the titles column in the ranges list, pt: constant, so the spans line up and the window does not change.
+    /// A title that does not fit is truncated with an ellipsis.
     private var nameColumnWidth: Double { 100 }
 
     private func deleteButton(_ id: UUID) -> some View {
@@ -559,15 +559,15 @@ struct SettingsView: View {
         .buttonStyle(.borderless)
     }
 
-    /// Срок диапазона текстом: «2026-10-01 – 2026-10-24».
+    /// Range span as text: "2026-10-01 – 2026-10-24".
     private static func rangeText(_ period: Period) -> String {
         "\(DayStore.key(for: period.start)) – \(DayStore.key(for: period.end))"
     }
 
-    /// Строка диапазона: название, начало, конец, удаление. Истёкшие приглушены и зачёркнуты.
+    /// Range row: name, start, end, deletion. Expired ones are muted and struck through.
     private func rangeRow(_ id: UUID) -> some View {
-        // Привязка по id, а не по индексу: после удаления строка ещё раз читает своё значение, и индекс
-        // выходил бы за границы массива (падение).
+        // Binding by id, not by index: after deletion the row reads its value once more, and the index
+        // would go out of the array's bounds (a crash).
         let period = Binding<Period>(
             get: { appearance.periods.first { $0.id == id } ?? Period(id: id, name: "", start: .now, end: .now) },
             set: { value in
@@ -576,7 +576,7 @@ struct SettingsView: View {
         let isExpired = period.wrappedValue.isExpired(on: .now)
         return VStack(alignment: .leading) {
             if editingRangeID == id {
-                // Правка: название и срок можно перепечатать, кнопка «Done» возвращает строку в текст.
+                // Editing: the name and span can be retyped, the "Done" button returns the row to text.
                 HStack(spacing: 8) {
                     TextField("", text: period.name)
                         .labelsHidden()
@@ -585,7 +585,7 @@ struct SettingsView: View {
                         get: { period.wrappedValue.start },
                         set: {
                             period.wrappedValue.start = $0
-                            // Конец не может быть раньше начала.
+                            // The end cannot be earlier than the start.
                             if period.wrappedValue.end < $0 { period.wrappedValue.end = $0 }
                         }), displayedComponents: .date)
                         .labelsHidden()
@@ -599,12 +599,12 @@ struct SettingsView: View {
                     deleteButton(id)
                 }
             } else {
-                // Обычный вид: название и срок текстом, справа «Edit» и «Delete».
+                // Normal view: name and span as text, "Edit" and "Delete" on the right.
                 HStack(spacing: 8) {
-                    // Название, срок и «exp» выровнены по базовой линии, а не по центру рамок: мелкая подпись
-                    // иначе казалась приподнятой.
+                    // The name, span and "exp" are aligned by the baseline, not by the centers of their frames: the small label
+                    // otherwise looked raised.
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        // Названия в колонке одной ширины: сроки встают по сетке (одна вертикаль у всех строк).
+                        // Names in a column of one width: spans line up on a grid (one vertical for all rows).
                         Text(period.wrappedValue.name.isEmpty ? "Untitled" : period.wrappedValue.name)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -612,7 +612,7 @@ struct SettingsView: View {
                         Text(Self.rangeText(period.wrappedValue))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        // Прошедший диапазон не зачёркнут, а приглушён и подписан.
+                        // A past range is not struck through but muted and labeled.
                         if isExpired {
                             Text("exp")
                                 .font(.caption2)
@@ -621,7 +621,7 @@ struct SettingsView: View {
                     }
                     Spacer(minLength: 8)
                     Button("Edit", systemImage: "pencil") {
-                        // Порядок строк замораживается на время правки: строка не убегает, пока меняются даты.
+                        // Row order is frozen while editing: the row does not run away while the dates change.
                         frozenRangeOrder = orderedPeriods.map(\.id)
                         editingRangeID = id
                     }
@@ -630,7 +630,7 @@ struct SettingsView: View {
                     deleteButton(id)
                 }
             }
-            // Длинный период не помещается в окно: режим «Период» покажет вместо него обычную ленту.
+            // A long period does not fit in the window: "Period" mode will show the ordinary feed instead.
             if !isExpired, appearance.estimatedHeight(of: period.wrappedValue)
                 > appearance.periodRoom(screenHeight: Double(NSScreen.main?.frame.height ?? 0)) {
                 Text("Doesn't fit in the window: the Range view will show the feed")
@@ -641,7 +641,7 @@ struct SettingsView: View {
         .opacity(isExpired ? 0.5 : 1)
     }
 
-    /// Строка формата: название, пример (как будет выглядеть), поле ввода с рамкой и меню готовых шаблонов.
+    /// Format row: title, example (how it will look), a bordered input field and a menu of ready templates.
     private func formatRow(_ title: String, example: String, text: Binding<String>, presets: [String]) -> some View {
         HStack(spacing: 8) {
             Text(title).frame(width: 56, alignment: .leading)
@@ -669,7 +669,7 @@ struct SettingsView: View {
 
 }
 
-/// Поле записи глобального хоткея: по нажатию ждёт комбинацию (минимум один модификатор), Esc отменяет.
+/// Global hotkey recording field: on click it waits for a combination (at least one modifier), Esc cancels.
 private struct HotKeyRecorder: View {
     let desktop: DesktopController
     @State private var isRecording = false
@@ -693,7 +693,7 @@ private struct HotKeyRecorder: View {
 
     private func start() {
         isRecording = true
-        // Пока идёт запись, хоткей снят: иначе система перехватила бы нажатие раньше окна.
+        // While recording, the hotkey is removed: otherwise the system would catch the key press before the window.
         desktop.pauseHotKey(true)
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == UInt16(kVK_Escape) {

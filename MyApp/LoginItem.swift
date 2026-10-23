@@ -1,7 +1,7 @@
 import ServiceManagement
 
-/// Автозапуск при входе в систему (Start at login). Источник истины — системный статус, а не UserDefaults:
-/// пользователь может выключить пункт в «Системные настройки → Основные → Объекты входа».
+/// Start at login. The source of truth is the system status, not UserDefaults:
+/// the user can turn the item off in "System Settings → General → Login Items".
 enum LoginItem {
     static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
 
@@ -9,13 +9,13 @@ enum LoginItem {
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {
-            print("Автозапуск не изменён: \(error)")
+            print("Start at login not changed: \(error)")
         }
     }
 }
 
 extension DesktopController {
-    /// Включает автозапуск один раз, при первом запуске. Дальше выбор пользователя не трогается.
+    /// Turns on start at login once, on first launch. After that the user's choice is left alone.
     func enableLoginItemOnFirstLaunch() {
         let key = "loginItemInitialized"
         guard !UserDefaults.standard.bool(forKey: key) else { return }

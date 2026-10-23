@@ -2,20 +2,20 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension Notification.Name {
-    /// Файл данных теперь лежит в другой папке: лента перечитывает его.
+    /// The data file now lives in another folder: the feed rereads it.
     static let dataFolderChanged = Notification.Name("dcal.dataFolderChanged")
 }
 
-/// Экспорт дневника в JSON или Markdown: все дни от первой записи, пустые тоже.
+/// Diary export to JSON or Markdown: every day from the first entry, empty ones included.
 enum Export {
-    /// День по ключу "yyyy-MM-dd".
+    /// Day by key "yyyy-MM-dd".
     private static func date(_ key: String) -> Date? {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
         return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
-    /// Ключи всех дней от первой записи до последней или до сегодняшнего дня (что позже).
+    /// Keys of all days from the first entry to the last one or to today (whichever is later).
     static func days(_ entries: [String: DayEntry], today: Date = .now) -> [String] {
         let calendar = Calendar.current
         guard let first = entries.keys.min().flatMap(date) else { return [] }
@@ -30,7 +30,7 @@ enum Export {
         return keys
     }
 
-    /// Тот же формат, что у файла данных, но с каждым днём (у пустых дней текст пустой).
+    /// Same format as the data file, but with every day (empty days have empty text).
     static func json(_ entries: [String: DayEntry], today: Date = .now) throws -> Data {
         let all = Dictionary(uniqueKeysWithValues: days(entries, today: today).map { ($0, entries[$0] ?? DayEntry(text: "")) })
         let encoder = JSONEncoder()
@@ -38,13 +38,13 @@ enum Export {
         return try encoder.encode(all)
     }
 
-    /// Список «дата — текст»; пустой день это одна дата. Ссылка на заметку добавляется, если это обычная ссылка.
+    /// "date — text" list; an empty day is just a date. A note link is added if it is a regular link.
     static func markdown(_ entries: [String: DayEntry], today: Date = .now) -> String {
         days(entries, today: today).map { key in
             let entry = entries[key]
             var line = "- " + key
             if let text = entry?.text, !text.isEmpty {
-                // Следующие строки дня стоят под первой с отступом, чтобы остаться в том же пункте списка.
+                // Following lines of a day are indented under the first so they stay in the same list item.
                 line += " — " + text.replacingOccurrences(of: "\n", with: "\n  ")
             }
             if let note = entry?.note, !note.hasPrefix(AppleNotes.prefix) { line += " [note](\(note))" }
@@ -52,7 +52,7 @@ enum Export {
         }.joined(separator: "\n") + "\n"
     }
 
-    /// Окно сохранения и запись файла (пункт меню).
+    /// Save dialog and writing the file (menu item).
     static func save(markdown isMarkdown: Bool) {
         NSApp.activate()
         guard let entries = try? DayStore().load(), !entries.isEmpty else {
@@ -71,8 +71,8 @@ enum Export {
         }
     }
 
-    /// Выбор папки для файла данных (например, в iCloud Drive). Текущий файл копируется туда, а старый остаётся на месте.
-    /// Если в выбранной папке уже лежит файл данных, берётся он.
+    /// Choose the folder for the data file (for example, in iCloud Drive). The current file is copied there and the old one stays in place.
+    /// If the chosen folder already has a data file, that one is used.
     static func chooseDataFolder() {
         NSApp.activate()
         let panel = NSOpenPanel()
@@ -82,7 +82,7 @@ enum Export {
         panel.message = "Folder for the \(DayStore.fileName) file (for example, in iCloud Drive)"
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         let current = DayStore.defaultURL
-        // Файл под прежним именем в выбранной папке тоже подхватывается.
+        // A file under the previous name in the chosen folder is picked up too.
         DayStore.migrateLegacyFile(in: folder)
         let target = folder.appending(path: DayStore.fileName)
         guard target.standardizedFileURL != current.standardizedFileURL else { return }
@@ -104,7 +104,7 @@ enum Export {
         NotificationCenter.default.post(name: .dataFolderChanged, object: nil)
     }
 
-    /// Окно с сообщением об ошибке (общее для экспорта, папки данных и файла настроек).
+    /// Error message dialog (shared by export, the data folder and the settings file).
     static func alert(_ title: String, _ text: String) {
         let alert = NSAlert()
         alert.messageText = title

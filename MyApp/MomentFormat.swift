@@ -1,14 +1,14 @@
 import Foundation
 
-/// Формат даты в духе moment.js, только дата без времени: YYYY MM DD ddd dddd Do Q W и т.д.
-/// Текст в [квадратных скобках] выводится как есть. Названия на английском, неизвестные символы выводятся как есть.
+/// Moment.js-style date format, date only, no time: YYYY MM DD ddd dddd Do Q W and so on.
+/// Text in [square brackets] is output as is. Names are in English; unknown characters are output as is.
 enum MomentFormat {
     private static let tokens = [
         "YYYY", "YY", "Y", "Q", "Qo", "MMMM", "MMM", "MM", "Mo", "M", "DDDD", "DDDo", "DDD", "DD", "Do", "D",
         "dddd", "ddd", "dd", "do", "d", "e", "E", "ww", "wo", "w", "WW", "Wo", "W", "gggg", "gg", "GGGG", "GG",
     ].sorted { $0.count > $1.count }
 
-    /// Календари создаются один раз: форматируется каждая строка ленты при каждой перерисовке.
+    /// Calendars are created once: every feed row is formatted on every redraw.
     private static let gregorian: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "en_US")
@@ -42,7 +42,7 @@ enum MomentFormat {
     private static func value(of token: String, date: Date, calendar: Calendar, iso: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
         let year = parts.year ?? 0, month = parts.month ?? 1, day = parts.day ?? 1
-        let weekday = (parts.weekday ?? 1) - 1  // 0 — воскресенье
+        let weekday = (parts.weekday ?? 1) - 1  // 0 is Sunday
         switch token {
         case "YYYY": return String(format: "%04d", year)
         case "YY": return String(format: "%02d", year % 100)

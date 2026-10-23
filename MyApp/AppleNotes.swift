@@ -1,12 +1,12 @@
 import Foundation
 
-/// Apple Notes через AppleScript (у Notes нет ссылок на заметки). Скрипты идут через `osascript` в фоне:
-/// пока macOS спрашивает разрешение на управление Notes или Notes запускается, лента не зависает.
+/// Apple Notes via AppleScript (Notes has no links to notes). Scripts run through `osascript` in the background:
+/// the feed does not freeze while macOS asks for permission to control Notes or while Notes launches.
 enum AppleNotes {
-    /// В поле `note` записи дня ссылка на заметку Notes хранится с этим префиксом, дальше идёт id заметки.
+    /// A day's `note` field stores the link to a Notes note with this prefix, followed by the note id.
     static let prefix = "apple-notes-id:"
 
-    /// Находит заметку с таким именем в папке (папка и заметка создаются, если их нет), показывает её и возвращает id.
+    /// Finds the note with this name in the folder (the folder and note are created if missing), shows it and returns its id.
     static func openOrCreate(name: String, folder: String) async -> String? {
         let name = escaped(name), folder = escaped(folder)
         return await run("""
@@ -30,7 +30,7 @@ enum AppleNotes {
         """)
     }
 
-    /// Показывает заметку по id.
+    /// Shows the note by id.
     static func show(id: String) async {
         _ = await run("""
         tell application "Notes"
@@ -44,7 +44,7 @@ enum AppleNotes {
         text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
 
-    /// Выполняет скрипт; nil, если он завершился ошибкой (например, нет разрешения).
+    /// Runs a script; nil if it failed (for example, permission is missing).
     private static func run(_ script: String) async -> String? {
         await Task.detached {
             let process = Process()

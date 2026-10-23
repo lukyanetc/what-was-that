@@ -1,8 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Настройки в одном JSON-файле (экспорт и импорт). Все поля необязательные: чего нет в файле, при импорте не меняется.
-/// Не входят: выбранные календари и положение окна (привязаны к этому Mac и экрану).
+/// Settings in a single JSON file (export and import). All fields are optional: anything missing from the file is left unchanged on import.
+/// Not included: selected calendars and window position (tied to this Mac and screen).
 struct SettingsFile: Codable {
     var version: Int? = 1
     var viewKind: String?
@@ -14,7 +14,7 @@ struct SettingsFile: Codable {
     var periods: [Period]?
     var showsPeriodsInFeed: Bool?
     var showsPeriodCounter: Bool?
-    /// Пустая строка — цвет по умолчанию.
+    /// Empty string means the default color.
     var highlight: String?
     var dateFormat: String?
     var showsMonth: Bool?
@@ -40,7 +40,7 @@ struct SettingsFile: Codable {
 }
 
 extension Appearance {
-    /// Текущие настройки в виде JSON.
+    /// Current settings as JSON.
     func settingsJSON() throws -> Data {
         let file = SettingsFile(
             viewKind: viewKind.rawValue, color: color.hex, adapts: adapts, textOpacity: textOpacity, width: width,
@@ -57,7 +57,7 @@ extension Appearance {
         return try encoder.encode(file)
     }
 
-    /// Применяет настройки из JSON. Числа зажимаются в допустимые границы, неизвестные значения пропускаются.
+    /// Applies settings from JSON. Numbers are clamped to valid bounds, unknown values are skipped.
     func applySettings(_ data: Data) throws {
         let file = try JSONDecoder().decode(SettingsFile.self, from: data)
         if let value = file.viewKind.flatMap({ ViewKind(rawValue: $0) }) { viewKind = value }
@@ -97,7 +97,7 @@ extension Appearance {
         }
     }
 
-    /// Окно сохранения и запись файла настроек (пункт меню).
+    /// Save dialog and writing the settings file (menu item).
     func exportSettings() {
         NSApp.activate()
         let panel = NSSavePanel()
@@ -111,7 +111,7 @@ extension Appearance {
         }
     }
 
-    /// Окно выбора файла и применение настроек (пункт меню).
+    /// Open dialog and applying the settings (menu item).
     func importSettings() {
         NSApp.activate()
         let panel = NSOpenPanel()

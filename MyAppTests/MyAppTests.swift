@@ -90,7 +90,7 @@ struct DayStoreTests {
         let new = DayStore(url: folder.appending(path: DayStore.fileName))
         #expect(try new.load()["2026-03-10"]?.text == "старая запись")
         #expect(FileManager.default.fileExists(atPath: old.path(percentEncoded: false)))
-        // Повторно новый файл не перезаписывается.
+        // The new file is not overwritten again.
         try new.set("новая запись", for: "2026-03-11")
         DayStore.migrateLegacyFile(in: folder)
         #expect(try new.load()["2026-03-11"]?.text == "новая запись")
@@ -100,7 +100,7 @@ struct DayStoreTests {
         let calendar = Calendar.current
         let first = calendar.date(from: DateComponents(year: 2026, month: 12, day: 31))!
         let next = calendar.date(byAdding: .day, value: 1, to: first)!
-        // Повторный вызов берёт значение из кэша и не должен отличаться от первого.
+        // A repeated call takes the value from the cache and must not differ from the first.
         #expect(DayStore.key(for: first) == "2026-12-31")
         #expect(DayStore.key(for: first) == "2026-12-31")
         #expect(DayStore.key(for: next) == "2027-01-01")
@@ -298,7 +298,7 @@ struct AppearanceTests {
     }
 
     @Test func cropRectCutsSidesOfWiderImage() {
-        // Картинка вдвое шире экрана: на экране видна только средняя половина по ширине.
+        // The image is twice as wide as the screen: only the middle half by width is visible.
         let screen = CGRect(x: 0, y: 0, width: 1000, height: 1000)
         let rect = Wallpaper.cropRect(window: screen, screen: screen, imageSize: CGSize(width: 2000, height: 1000))
         #expect(rect == CGRect(x: 0.25, y: 0, width: 0.5, height: 1))
@@ -307,7 +307,7 @@ struct AppearanceTests {
 }
 
 struct MomentFormatTests {
-    /// 10 марта 2026 — вторник, 69-й день года, ISO-неделя 11.
+    /// March 10, 2026 is a Tuesday, day 69 of the year, ISO week 11.
     private let date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12))!
 
     @Test(arguments: [

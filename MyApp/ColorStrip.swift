@@ -1,21 +1,21 @@
 import SwiftUI
 
 extension View {
-    /// Прозрачность текста записи. Цветные эмодзи не берут прозрачность из цвета текста (`foregroundStyle`),
-    /// поэтому она применяется как прозрачность самого вида, а цвет текста идёт без неё (иначе она сложилась бы дважды).
+    /// Opacity of the entry text. Color emoji do not take opacity from the text color (`foregroundStyle`),
+    /// so it is applied as the opacity of the view itself, and the text color is used without it (otherwise it would apply twice).
     func fadedLikeText(_ appearance: Appearance) -> some View {
         foregroundStyle(appearance.textColor).opacity(appearance.textOpacity)
     }
 }
 
-/// Ряд из 9 цветов и «без цвета» в виде скруглённых квадратов со стороной `size`.
-/// Они выезжают из места индикатора вправо вдоль линии ввода, один за другим, и слегка проявляются. Выбор вызывает `onChoose` (nil — без цвета).
+/// A row of 9 colors and "no color" as rounded squares with side `size`.
+/// They slide out from the indicator position to the right along the input line, one after another, and fade in slightly. Choosing one calls `onChoose` (nil means no color).
 struct ColorStrip: View {
     let size: Double
     let onChoose: (Int?) -> Void
     @State private var isOpen = false
 
-    /// Невидимое поле вокруг кружка: по нему тоже можно попасть кликом.
+    /// Invisible area around the dot: clicking it also counts.
     static let slotPadding = 2.0
 
     var body: some View {
@@ -44,7 +44,7 @@ struct ColorStrip: View {
             RoundedRectangle(cornerRadius: size * 0.25)
                 .fill(Appearance.indicatorColors[index].opacity(Appearance.indicatorOpacity))
         } else {
-            // «Без цвета»: пустой контур с крестиком.
+            // "No color": an empty outline with a cross.
             RoundedRectangle(cornerRadius: size * 0.25).strokeBorder(lineWidth: 1).opacity(0.5)
                 .overlay { Image(systemName: "xmark").font(.system(size: size * 0.4)).opacity(0.5) }
         }

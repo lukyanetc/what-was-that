@@ -1,6 +1,6 @@
 import Carbon
 
-/// Глобальный хоткей через Carbon: разрешения не нужны. Работает, пока не вызван `unregister()`.
+/// Global hotkey via Carbon: no permissions needed. Works until `unregister()` is called.
 final class HotKey {
     private static var actions: [UInt32: () -> Void] = [:]
     private static var nextID: UInt32 = 1

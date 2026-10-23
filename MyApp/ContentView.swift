@@ -1,66 +1,66 @@
 import SwiftUI
 
-/// Лента дней: год назад от самой ранней записи и два года вперёд от сегодняшнего дня, либо один месяц или неделя
-/// (см. `ViewKind`). В edit текст каждого дня редактируется.
+/// Day feed: a year back from the earliest entry and two years ahead from today, or a single month or week
+/// (see `ViewKind`). In edit each day's text is editable.
 struct ContentView: View {
     let desktop: DesktopController
     @State private var entries: [String: DayEntry] = [:]
-    /// Дни, изменённые, но ещё не записанные в файл.
+    /// Days that were changed but not yet written to the file.
     @State private var dirty: Set<String> = []
-    /// Что не так с файлом данных (повреждён, скачивается, не записывается); nil — всё в порядке. Показывается в углу окна.
+    /// What is wrong with the data file (corrupted, downloading, not saving); nil means all is well. Shown in the corner of the window.
     @State private var dataProblem: String?
-    /// Отложенное переразложение событий после смены приоритета календарей.
+    /// Deferred re-sorting of events after the calendar priority changes.
     @State private var orderTask: Task<Void, Never>?
-    /// Отложенная запись текста, см. `scheduleSave`.
+    /// Deferred text save, see `scheduleSave`.
     @State private var saveTask: Task<Void, Never>?
-    /// Время изменения файла при последнем чтении: по нему замечаем правки с другого Mac (iCloud).
+    /// File modification time at the last read: used to notice edits from another Mac (iCloud).
     @State private var fileStamp: Date?
-    /// Запасной интервал сверки файла, сек. Сверка читает только время изменения, сам файл перечитывается, если оно сменилось.
+    /// Fallback interval for checking the file, sec. The check reads only the modification time; the file itself is reread if it changed.
     private static let syncInterval = 600.0
     @FocusState private var focusedDay: Date?
-    /// День, у которого сейчас раскрыт ряд выбора цвета индикатора.
+    /// The day whose indicator color picker row is expanded now.
     @State private var pickerDay: Date?
-    /// День, в котором стоял курсор в текущем сеансе edit. Когда окно возвращает себе фокус (например, после
-    /// выбора эмодзи во внешней панели), курсор встаёт обратно в этот день, а не прыгает на «сегодня».
+    /// The day where the cursor was in the current edit session. When the window takes focus back (for example, after
+    /// picking an emoji in an external panel), the cursor returns to this day instead of jumping to "today".
     @State private var editingDay: Date?
-    /// Индексы полностью видимых в окне дней.
+    /// Indices of days fully visible in the window.
     @State private var visibleRange = 0...0
     @State private var isIndicatorVisible = true
-    /// Сегодняшний день и лента вокруг него; обновляются при смене даты.
+    /// Today and the feed around it; updated when the date changes.
     @State private var today = Calendar.current.startOfDay(for: .now)
     @State private var days = ContentView.days(around: Calendar.current.startOfDay(for: .now))
-    /// Месяц и неделя: на сколько отрезков окно сдвинуто от текущего (листание в scroll и edit; в locked всегда 0).
+    /// Month and week: how many spans the window is shifted from the current one (paging in scroll and edit; always 0 in locked).
     @State private var periodOffset = 0
-    /// Курсор ушёл за край отрезка стрелкой или Enter: +1 — встанет на первый день следующего, -1 — на последний предыдущего.
+    /// The cursor went past the edge of the span by arrow or Enter: +1 lands on the first day of the next one, -1 on the last of the previous.
     @State private var pendingEdge: Int?
-    /// Ширина колонки записей (одинакова у всех строк); по ней решается, можно ли рисовать запись поверх поля.
+    /// Width of the entries column (the same for all rows); it decides whether an entry can be drawn over the field.
     @State private var recordWidth = 0.0
-    /// Текущая попытка поставить курсор (см. `focusEditor`); новая отменяет предыдущую.
+    /// The current attempt to place the cursor (see `focusEditor`); a new one cancels the previous.
     @State private var focusTask: Task<Void, Never>?
-    /// Высота первого дня идущего периода (с названием), см. `periodAnchor`.
+    /// Height of the first day of the running period (with its title), see `periodAnchor`.
     @State var periodItemHeight = 0.0
-    /// Положение строк начала и конца периодов в окне ленты, см. `StickyPeriodTitles`.
+    /// Positions of the rows where periods start and end in the feed window, see `StickyPeriodTitles`.
     @State private var periodFrames = PeriodFrames()
     private static let feedSpace = "feed"
 
-    // Константы без `private`: ими пользуются и файлы с периодами (PeriodViews) и рядом выбора цвета.
+    // Constants without `private`: they are also used by the period files (PeriodViews) and the color picker row.
     static let calendar = Calendar.current
-    /// «Сегодня» стоит примерно на трети высоты окна.
+    /// "Today" sits at about a third of the window height.
     private static let todayAnchor = UnitPoint(x: 0, y: 0.3)
-    /// Приглушение для выходных и заголовков месяцев.
+    /// Dimming for weekends and month headings.
     static let mutedOpacity = 0.5
-    /// Насколько полоса «сегодня» выходит влево за текст. ScrollView обрезает содержимое по своим границам,
-    /// поэтому этот запас задан отступом внутри ленты, а не отступом окна.
+    /// How far the "today" bar extends to the left beyond the text. ScrollView clips its content at its bounds,
+    /// so this room is set as padding inside the feed, not as window padding.
     static let highlightInset = 35.0
-    /// Линия периода: толщина и промежуток до соседней линии и до дат.
+    /// Period line: thickness and the gap to the neighboring line and to the dates.
     static let lineWidth = 1.5
     static let lineGap = 3.0
-    /// Промежуток между названием периода и линиями.
+    /// Gap between the period title and the lines.
     static let titleGap = 6.0
-    /// Дополнительный отступ перед понедельником, когда он включён.
+    /// Extra gap before Monday when it is enabled.
     private static let weekGapHeight = 12.0
 
-    /// Самый ранний день с записью (ключи "yyyy-MM-dd" сортируются как строки).
+    /// The earliest day with an entry (the "yyyy-MM-dd" keys sort as strings).
     private static func earliestDay(in entries: [String: DayEntry]) -> Date? {
         guard let key = entries.keys.min() else { return nil }
         let parts = key.split(separator: "-").compactMap { Int($0) }
@@ -68,11 +68,11 @@ struct ContentView: View {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
-    /// Дни окна. Лента: см. ниже. Месяц и неделя: один отрезок, сдвинутый на `offset` отрезков от текущего.
+    /// The window's days. Feed: see below. Month and week: one span, shifted by `offset` spans from the current one.
     private static func days(around today: Date, earliest: Date? = nil, kind: ViewKind = .feed, offset: Int = 0) -> [Date] {
         if kind != .feed {
             let component: Calendar.Component = kind == .month ? .month : .weekOfYear
-            // Неделя всегда с понедельника, независимо от региональных настроек.
+            // The week always starts on Monday, regardless of regional settings.
             var cal = kind == .month ? calendar : Calendar(identifier: .iso8601)
             cal.timeZone = calendar.timeZone
             guard let anchor = cal.date(byAdding: component, value: offset, to: today),
@@ -80,7 +80,7 @@ struct ContentView: View {
             let count = cal.dateComponents([.day], from: interval.start, to: interval.end).day ?? 0
             return (0..<count).compactMap { cal.date(byAdding: .day, value: $0, to: interval.start) }
         }
-        // Год назад от самой ранней записи (или от сегодня, если она позже) и два года вперёд от сегодняшнего дня.
+        // A year back from the earliest entry (or from today if it is later) and two years ahead from today.
         let anchor = min(earliest ?? today, today)
         let first = calendar.date(byAdding: .year, value: -1, to: anchor) ?? today
         let last = calendar.date(byAdding: .year, value: 2, to: today) ?? today
@@ -98,8 +98,8 @@ struct ContentView: View {
                 }
                 .scrollTargetLayout()
                 .padding(.leading, leadingInset)
-                // Месяц, неделя и период: окно по размеру содержимого, поля сверху и снизу равны затуханию у краёв,
-                // чтобы строки не попадали в затухание.
+                // Month, week and period: the window is sized to content, the top and bottom margins equal the edge fade,
+                // so rows do not fall into the fade.
                 .padding(.vertical, desktop.isCompact ? desktop.edgeFade : 0)
                 .onGeometryChange(for: Double.self) { $0.size.height } action: { height in
                     if desktop.isCompact { desktop.periodHeight = height }
@@ -107,7 +107,7 @@ struct ContentView: View {
             }
             .scrollIndicators(.hidden)
             .coordinateSpace(name: Self.feedSpace)
-            // Названия периодов в scroll и edit: под лентой (не поверх полей ввода), плавно едут по линии.
+            // Period titles in scroll and edit: under the feed (not over the input fields), smoothly following the line.
             .background(alignment: .topLeading) {
                 StickyPeriodTitles(desktop: desktop, days: days, frames: periodFrames, leadingInset: leadingInset,
                                    visibleRange: $visibleRange)
@@ -123,17 +123,17 @@ struct ContentView: View {
                 desktop.shiftPeriod = { step in periodOffset += step }
                 desktop.flushPending = { flush() }
             }
-            // Смена отрезка (настройки, меню) и листание в scroll: набор дней строится заново.
+            // Span change (settings, menu) and paging in scroll: the set of days is rebuilt.
             .onChange(of: desktop.appearance.viewKind) {
                 periodOffset = 0
                 rebuildDays(proxy)
             }
             .onChange(of: periodOffset) { rebuildDays(proxy) }
-            // Настройки календаря: режим, выбранные календари, выданный доступ.
+            // Calendar settings: mode, selected calendars, granted access.
             .onChange(of: desktop.appearance.eventsMode) { loadEvents() }
             .onChange(of: desktop.appearance.eventCalendarIDs) { loadEvents() }
-            // Приоритет календарей меняется перетаскиванием в настройках: события переразбираются чуть позже, когда
-            // перетаскивание уже закончилось (иначе картинка строки висит на экране, пока лента перерисовывается).
+            // Calendar priority changes by dragging in settings: events are re-sorted a bit later, when
+            // the drag is already over (otherwise the row's image hangs on screen while the feed redraws).
             .onChange(of: desktop.appearance.eventCalendarOrder) {
                 orderTask?.cancel()
                 orderTask = Task {
@@ -143,18 +143,18 @@ struct ContentView: View {
                 }
             }
             .onChange(of: desktop.events.isAuthorized) { loadEvents() }
-            // Сменился идущий период (правка списка, начало или конец) или его место в окне: лента встаёт заново.
+            // The running period changed (list edit, start or end) or its place in the window: the feed settles again.
             .onChange(of: activePeriodStart) { restorePosition(proxy) }
-            // Высота первого дня меняется и при входе в edit (поле вместо текста, события): ленту двигать нельзя,
-            // иначе она сдвигается на пункт-два. Подгонка нужна только там, где лента стоит по якорю периода.
+            // The height of the first day also changes on entering edit (a field instead of text, events): the feed must not move,
+            // otherwise it shifts by a point or two. Fitting is needed only where the feed stands by the period anchor.
             .onChange(of: periodItemHeight) {
                 if desktop.mode == .locked || desktop.mode == .move { restorePosition(proxy) }
             }
             .onChange(of: desktop.periodOffset) { restorePosition(proxy) }
-            // После смены ширины лента возвращается на место: в locked к сегодняшнему дню, в остальных режимах
-            // к верхнему из видимых дней.
+            // After the width changes the feed returns to its place: in locked to today, in the other modes
+            // to the topmost visible day.
             .onChange(of: desktop.appearance.width) { restorePosition(proxy) }
-            // Смена размера шрифта меняет высоту строк: лента возвращается на место так же.
+            // A font size change alters row heights: the feed returns to its place the same way.
             .onChange(of: desktop.appearance.fontSize) { restorePosition(proxy) }
             .onChange(of: desktop.appearance.rowPadding) { restorePosition(proxy) }
             .onChange(of: focusedDay) { _, day in
@@ -168,22 +168,22 @@ struct ContentView: View {
                 if oldMode == .edit { flush() }
                 if mode == .scroll { reload() }
                 if mode == .edit {
-                    // Новый сеанс edit начинается с «сегодня» (или верхнего видимого дня).
+                    // A new edit session starts at "today" (or the topmost visible day).
                     editingDay = nil
-                    // Поля ввода появляются не мгновенно, поэтому фокус ставится с небольшой паузой.
+                    // Input fields do not appear instantly, so focus is set after a short pause.
                     Task {
                         try? await Task.sleep(for: .milliseconds(50))
                         if desktop.mode == .edit { focusEditor() }
                     }
                 }
                 if oldMode == .edit { focusedDay = nil }
-                // Выход из просмотра возвращает ленту к сегодняшнему дню (месяц и неделю к текущему отрезку).
+                // Leaving the view returns the feed to today (month and week to the current span).
                 if mode == .locked {
                     periodOffset = 0
                     if activePeriodStart == nil {
                         scrollHome(proxy)
                     } else {
-                        // Лента под слоем периода встаёт на место, когда слой уже её закрыл (не видно прыжка).
+                        // The feed under the period layer settles when the layer already covers it (the jump is not visible).
                         Task {
                             try? await Task.sleep(for: .milliseconds(300))
                             if desktop.mode == .locked { scrollHome(proxy) }
@@ -191,21 +191,21 @@ struct ContentView: View {
                     }
                 }
             }
-            // Ленивая лента при первой прокрутке к далёкой строке оценивает её положение приблизительно:
-            // после отрисовки при запуске прокручиваем ещё раз, уже точно.
+            // A lazy feed estimates the position of a distant row only approximately on the first scroll:
+            // after drawing at launch we scroll once more, now exactly.
             .task {
                 try? await Task.sleep(for: .milliseconds(150))
                 if desktop.mode == .locked { scrollHome(proxy) }
             }
-            // Окно становится key не сразу: активация приложения асинхронна. Фокус, поставленный до этого,
-            // не даёт курсора (лента «листает фокус», но курсора нет), поэтому ставим его заново, когда окно готово.
+            // The window does not become key right away: app activation is asynchronous. Focus set before that
+            // gives no caret (the feed "moves focus" but there is no caret), so we set it again when the window is ready.
             .task {
                 for await note in NotificationCenter.default.notifications(named: NSWindow.didBecomeKeyNotification) {
                     if note.object is DesktopWindow, desktop.mode == .edit { focusEditor() }
                 }
             }
-            // Файл мог измениться на другом Mac (iCloud). Сверяем время его изменения в естественные моменты:
-            // после пробуждения, при смене Space и (на случай, если ничего этого долго нет) по редкому таймеру.
+            // The file may have changed on another Mac (iCloud). We check its modification time at natural moments:
+            // after wake, on Space change and (in case none of those happens for a long time) on a rare timer.
             .task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(Self.syncInterval))
@@ -222,29 +222,29 @@ struct ContentView: View {
                     syncIfFileChanged()
                 }
             }
-            // Файл данных переехал в другую папку (меню «Папка данных…»).
+            // The data file moved to another folder (menu "Data Folder…").
             .task {
                 for await _ in NotificationCenter.default.notifications(named: .dataFolderChanged) { reload() }
             }
-            // Смена даты (полночь, пробуждение после сна): лента едет вместе с «сегодня».
+            // Date change (midnight, waking from sleep): the feed moves along with "today".
             .task {
                 for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) {
                     today = Self.calendar.startOfDay(for: .now)
                     syncIfFileChanged()
-                    // Период мог начаться или кончиться: окно подгоняется заново.
+                    // A period may have started or ended: the window is fitted again.
                     rebuildDays(proxy)
                     desktop.fitWindow()
                     if desktop.mode == .locked { scrollHome(proxy) }
                 }
             }
         }
-        // Режим «Период» в locked: ленту заменяет статичный слой периода, лента под ним невидима. В остальных видах
-        // лента остаётся без этих надстроек.
+        // "Period" mode in locked: the feed is replaced by a static period layer, the feed under it is invisible. In other views
+        // the feed stays without these add-ons.
         .modifier(PeriodSwap(isActive: desktop.appearance.viewKind == .period,
                              hidesContent: desktop.shownPeriod != nil, layer: periodLayer))
-        // Без отступов сверху и снизу: лента уходит за края окна, а затухание у краёв создаёт ощущение бесконечности.
-        // К затуханию у краёв добавляется мягкое «окно» под названием режима: лента под ним прозрачна до рабочего стола,
-        // и название не сливается с текстом.
+        // No top and bottom padding: the feed goes past the window edges, and the fade at the edges creates a sense of infinity.
+        // On top of the edge fade comes a soft "window" under the mode name: the feed under it is transparent down to the desktop,
+        // so the name does not blend into the text.
         .mask {
             edgeFadeMask
                 .overlay(alignment: .topTrailing) { modePlateHole }
@@ -262,7 +262,7 @@ struct ContentView: View {
         }
     }
 
-    /// Предупреждение о проблеме с файлом данных (под индикатором режима, виден во всех режимах).
+    /// Warning about a data file problem (under the mode indicator, visible in all modes).
     @ViewBuilder private var dataProblemLabel: some View {
         if let dataProblem {
             Text("⚠ \(dataProblem)")
@@ -276,9 +276,9 @@ struct ContentView: View {
         }
     }
 
-    /// День ленты: заголовок месяца, строка дня и линии периодов. Один и тот же вид в ленте и в статичном слое периода.
+    /// A feed day: month heading, day row and period lines. The same view in the feed and in the static period layer.
     func dayItem(_ day: Date, reportsFrames: Bool = false) -> some View {
-        // Строки начала и конца периодов сообщают своё положение в окне ленты (для плавных названий в scroll и edit).
+        // The rows where periods start and end report their position in the feed window (for smooth titles in scroll and edit).
         let calendar = Self.calendar
         let isBoundary = reportsFrames && desktop.appearance.showsPeriodMarks && desktop.appearance.periods.contains {
             calendar.startOfDay(for: $0.start) == day || calendar.startOfDay(for: $0.end) == day
@@ -300,17 +300,17 @@ struct ContentView: View {
                     if let range { periodFrames.frames[day] = range }
                 }
         }
-        // Отступ перед понедельником; у заголовка месяца свой отступ, первый день не сдвигаем.
+        // Gap before Monday; the month heading has its own gap, the first day is not shifted.
         .padding(.top, desktop.appearance.weekGap && isMonday(day) && !isMonthStart(day) ? Self.weekGapHeight : 0)
-        // Линии периодов, начавшихся раньше, идут через заголовки месяцев и отступы без разрыва.
+        // Lines of periods that started earlier run through month headings and gaps without a break.
         .background(alignment: .topLeading) { periodLines(on: day, starting: false) }
-        // Высота первого дня периода нужна, чтобы лента встала так же, как стоит статичный слой периода.
+        // The height of the period's first day is needed so the feed stands the same way as the static period layer.
         .onGeometryChange(for: Double.self) { $0.size.height } action: { height in
             if day == activePeriodStart { periodItemHeight = height }
         }
     }
 
-    /// Домашняя позиция ленты: при идущем периоде («Период») его начало на заданном месте, иначе «сегодня».
+    /// Feed home position: with a running period ("Period") its start is at the set place, otherwise "today".
     private func scrollHome(_ proxy: ScrollViewProxy) {
         if let start = activePeriodStart, days.contains(start) {
             proxy.scrollTo(start, anchor: periodAnchor)
@@ -319,7 +319,7 @@ struct ContentView: View {
         }
     }
 
-    /// Маска: лента плавно уходит в прозрачность у верхнего и нижнего края окна.
+    /// Mask: the feed fades smoothly to transparent at the top and bottom edge of the window.
     private var edgeFadeMask: some View {
         let fade = desktop.edgeFade
         return VStack(spacing: 0) {
@@ -329,13 +329,13 @@ struct ContentView: View {
         }
     }
 
-    /// Режим в правом верхнем углу: появляется сразу при смене режима. Горит в scroll, edit и move;
-    /// locked показывается секунду и плавно гаснет.
-    /// Строка «> режим»: промежуток в полпробела, а знак «>» опущен на пару пунктов, чтобы стоять по центру строчных букв.
+    /// Mode in the top right corner: appears right away on mode change. Lit in scroll, edit and move;
+    /// locked is shown for a second and fades smoothly.
+    /// The "> mode" line: a half-space gap, and the ">" sign is lowered a couple of points to sit at the center of lowercase letters.
     private var modeLabel: some View {
         HStack(spacing: 4) {
             Text(">").baselineOffset(-1)
-            // Невидимое «scroll» (самое длинное слово) задаёт ширину: «>» стоит на месте, слово меняется за ним.
+            // The invisible "scroll" (the longest word) sets the width: ">" stays in place, the word changes after it.
             ZStack(alignment: .leading) {
                 Text("scroll").hidden()
                 Text(desktop.mode.rawValue)
@@ -344,13 +344,13 @@ struct ContentView: View {
         .font(desktop.appearance.font)
     }
 
-    /// Отступ строки режима сверху. Лента: ниже строки меню, окно уходит под неё. Месяц и неделя: окно небольшое.
+    /// Top inset of the mode line. Feed: below the menu bar, the window goes under it. Month and week: the window is small.
     private var modeTopInset: Double { desktop.isCompact ? 8 : 56 }
 
-    /// Прозрачное «окно» в маске ленты под строкой режима: ровный прямоугольник с небольшим скруглением, вырезает ленту
-    /// до рабочего стола. Подгоняется под слово: начинается от «>» (он стоит на месте) и кончается за словом режима.
-    /// Положение задаёт невидимая строка `modeLabel` той же ширины, что и настоящая, а плашка рисуется за ней.
-    /// Гаснет вместе с самим названием.
+    /// A transparent "window" in the feed mask under the mode line: a flat rectangle with slight rounding that cuts the feed
+    /// down to the desktop. Fitted to the word: starts at ">" (it stays in place) and ends past the mode word.
+    /// The position is set by the invisible `modeLabel` line of the same width as the real one, and the plate is drawn behind it.
+    /// Fades together with the name itself.
     private var modePlateHole: some View {
         modeLabel
             .foregroundStyle(.clear)
@@ -391,28 +391,28 @@ struct ContentView: View {
         let label = desktop.appearance.dayText(day)
         let isWeekend = Self.calendar.isDateInWeekend(day)
         let key = DayStore.key(for: day)
-        // Дата стоит на уровне первой строки записи, остальные строки идут под ней в колонке записей.
+        // The date sits at the level of the entry's first line, the other lines go under it in the entries column.
         return HStack(alignment: .firstTextBaseline, spacing: Self.dotGap) {
             Text(label)
                 .opacity(isWeekend ? Self.mutedOpacity : 1)
-                // Колонка даты фиксированной ширины: индикаторы и записи стоят на одной вертикали при любом шрифте.
+                // Fixed-width date column: indicators and entries stand on one vertical with any font.
                 .frame(width: desktop.appearance.dateColumnWidth, alignment: .leading)
-            // Место под индикатор (сам он рисуется поверх, см. `indicator`), между датой и записью.
+            // Room for the indicator (it is drawn on top, see `indicator`), between the date and the entry.
             Color.clear.frame(width: Self.dotWidth, height: 0)
-            // Запись дня, под ней события календаря столбиком (сначала на весь день, дальше по времени).
+            // The day's entry, under it the calendar events in a column (all-day first, then by time).
             VStack(alignment: .leading, spacing: 0) {
-            // Пока раскрыт выбор цвета, запись скрыта: ряд цветов открывается вдоль линии ввода, на её месте.
+            // While the color picker is open, the entry is hidden: the color row opens along the input line, in its place.
             Group {
-                // Пока раскрыт выбор цвета, поля ввода нет вовсе: даже скрытое, оно заставляет курсор мыши
-                // над рядом цветов становиться текстовым. Вместо него обычный текст.
+                // While the color picker is open, there is no input field at all: even hidden, it makes the mouse cursor
+                // over the color row turn into a text cursor. Plain text stands in for it.
                 if desktop.mode == .edit && pickerDay != day {
-                    // Буквы рисует тот же Text, что и в locked (поле ввода рисует тот же шрифт на пиксель иначе, и
-                    // записи «подскакивали» при входе в edit). Поле остаётся для курсора, выделения и ввода, а его
-                    // собственный текст прозрачен. Если строка шире колонки, она переносится, и перенос в поле
-                    // и в Text мог бы отличаться: тогда текст показывает само поле.
+                    // The letters are drawn by the same Text as in locked (the input field draws the same font a pixel differently, and
+                    // entries "jumped" on entering edit). The field stays for the caret, selection and input, and its
+                    // own text is transparent. If a line is wider than the column it wraps, and the wrap in the field
+                    // and in Text could differ: then the text is shown by the field itself.
                     let text = entries[key]?.text ?? ""
                     let overlaysText = fitsInColumn(text)
-                    // Несколько строк в дне (Shift+Enter): запись переносится и растёт вниз.
+                    // Several lines in a day (Shift+Enter): the entry wraps and grows downward.
                     let field = TextField("", text: binding(for: key), axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(1...20)
@@ -421,10 +421,10 @@ struct ContentView: View {
                         .opacity(desktop.appearance.textOpacity)
                         .focused($focusedDay, equals: day)
                     if overlaysText {
-                        // Высоту строки задаёт тот же Text, что и в locked, а поле лежит поверх и на размер не влияет:
-                        // поле чуть выше текста, и строки ленты (вместе с событиями под ними) сдвигались при входе в edit.
-                        // Пустые строки (после Shift/Cmd/Opt+Enter) рисуются пробелом: Text с «пустой» строкой ниже
-                        // обычной и не растёт вместе с полем, из-за чего дата сдвигалась, пока не появятся буквы.
+                        // The row height is set by the same Text as in locked, and the field lies on top and does not affect the size:
+                        // the field is slightly taller than the text, and feed rows (with the events under them) used to shift on entering edit.
+                        // Empty lines (after Shift/Cmd/Opt+Enter) are drawn as a space: a Text with an "empty" line is shorter
+                        // than normal and does not grow with the field, so the date shifted until letters appeared.
                         let padded = text.split(separator: "\n", omittingEmptySubsequences: false)
                             .map { $0.isEmpty ? " " : String($0) }.joined(separator: "\n")
                         recordText(AttributedString(padded))
@@ -441,7 +441,7 @@ struct ContentView: View {
             .onGeometryChange(for: Double.self) { $0.size.width } action: { recordWidth = $0 }
             .opacity(pickerDay == day ? 0 : 1)
             .overlay(alignment: .topTrailing) {
-                // Режим «только будущие»: сколько прошедших событий скрыто.
+                // "Future only" mode: how many past events are hidden.
                 let hidden = desktop.events.events(on: day, mode: desktop.appearance.eventsMode).hidden
                 if hidden > 0 {
                     Text("+\(hidden)").font(desktop.appearance.smallFont).opacity(Self.mutedOpacity).allowsHitTesting(false)
@@ -449,21 +449,21 @@ struct ContentView: View {
             }
             eventLines(day)
             }
-            // Место под стрелку заметки в конце строки (сама стрелка рисуется поверх, см. `noteArrow`).
+            // Room for the note arrow at the end of the line (the arrow itself is drawn on top, see `noteArrow`).
             Color.clear.frame(width: Self.noteArrowWidth, height: 0)
         }
-        // Названия периодов, начинающихся в этот день: слева от линий, в отдельной колонке (название → линия → даты).
-        // Под строкой, а не поверх: слой над полем ввода в edit заставлял ленту дребезжать.
+        // Titles of periods that start on this day: to the left of the lines, in a separate column (title → line → dates).
+        // Under the row, not over it: a layer over the input field in edit made the feed jitter.
         .background(alignment: .topLeading) {
             PeriodTitles(desktop: desktop, day: day)
         }
-        // Номер недели стоит слева от даты, в запасе под полосу «сегодня», и не сдвигает текст.
+        // The week number stands to the left of the date, in the spare room for the "today" bar, and does not shift the text.
         .overlay(alignment: .topLeading) {
             if desktop.appearance.showsWeekNumber && isMonday(day) {
                 Text(desktop.appearance.weekText(day))
                     .font(desktop.appearance.smallFont)
                     .opacity(0.4)
-                    // Высота рамки равна высоте строки даты: номер стоит по её центру, а не прижат к верху.
+                    // The frame height equals the date row height: the number sits at its center instead of being pressed to the top.
                     .frame(width: Self.highlightInset - 6, height: desktop.appearance.lineHeight, alignment: .trailing)
                     .offset(x: -Self.highlightInset, y: 0)
             }
@@ -473,9 +473,9 @@ struct ContentView: View {
         .overlay(alignment: .topTrailing) { noteArrow(day) }
         .overlay(alignment: .topLeading) {
             if pickerDay == day {
-                // Ряд цветов стоит на уровне первой строки записи, как и сам индикатор.
+                // The color row stands at the level of the entry's first line, like the indicator itself.
                 GeometryReader { geo in
-                    // Квадраты со стороной в высоту планки стоят справа от неё: прежний цвет остаётся виден.
+                    // Squares with a side equal to the bar height stand to the right of it: the previous color stays visible.
                     ColorStrip(size: markerHeight) { choose($0, for: day) }
                         .offset(x: dotX + Self.dotWidth + Self.dotGap - ColorStrip.slotPadding,
                                 y: centerY(in: geo.size.height) - markerHeight / 2 - ColorStrip.slotPadding)
@@ -489,12 +489,12 @@ struct ContentView: View {
         }
     }
 
-    /// События календаря дня столбиком: время и название (у событий на весь день только название).
+    /// The day's calendar events in a column: time and title (all-day events have only the title).
     @ViewBuilder private func eventLines(_ day: Date) -> some View {
         let shown = desktop.events.events(on: day, mode: desktop.appearance.eventsMode).shown
         ForEach(shown) { event in
             let startsToday = !event.isAllDay && Self.calendar.startOfDay(for: event.start) == day
-            // Вид записи дня, но мельче и светлее, чтобы не перевешивать её; событие отличает кружок цвета календаря.
+            // Looks like the day's entry, but smaller and lighter so as not to outweigh it; an event is distinguished by the calendar color dot.
             HStack(alignment: .top, spacing: Self.dotGap + 2) {
                 Circle()
                     .fill(event.color)
@@ -508,46 +508,46 @@ struct ContentView: View {
         }
     }
 
-    /// Загружает события календаря за дни ленты (в режиме «Не показывать» ничего не читается).
+    /// Loads calendar events for the feed's days (nothing is read in "Don't show" mode).
     private func loadEvents() {
         let ids = desktop.appearance.eventsMode == .hide ? [] : desktop.appearance.eventCalendarIDs
         desktop.events.load(days: days, calendarIDs: ids, order: desktop.appearance.eventCalendarOrder)
     }
 
-    /// Запись в ленте (locked, scroll) и поверх поля в edit: одна и та же вёрстка, чтобы буквы стояли в одном месте.
+    /// An entry in the feed (locked, scroll) and over the field in edit: the same layout so the letters stand in the same place.
     private func recordText(_ text: AttributedString) -> some View {
-        // Текст, дойдя до края окна, переносится на следующую строку и виден целиком.
-        // Пустая запись рисуется пробелом: пустой Text ниже обычной строки на пиксель, и события календаря под ней
-        // сдвигались вниз, как только появлялась первая буква.
+        // Text that reaches the window edge wraps to the next line and is fully visible.
+        // An empty entry is drawn as a space: an empty Text is a pixel shorter than a normal line, and the calendar events under it
+        // shifted down as soon as the first letter appeared.
         Text(text.characters.isEmpty ? AttributedString(" ") : text)
             .fadedLikeText(desktop.appearance)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Помещается ли самая длинная строка записи в колонку записей (с запасом на отступы поля ввода).
+    /// Whether the longest line of the entry fits in the entries column (with room for the input field's padding).
     private func fitsInColumn(_ text: String) -> Bool {
         recordWidth > 0 && desktop.appearance.textWidth(text) + 8 <= recordWidth
     }
 
-    /// Индикатор — вертикальная планка: ширина, а высота одиночного дня как доля высоты строки.
+    /// The indicator is a vertical bar: the width, and the height of a single day as a fraction of the row height.
     private static let dotWidth = 4.0
     private static let markerHeightFactor = 0.8
-    /// Высота планки одиночного дня; ряд выбора цвета состоит из таких же планок.
+    /// Height of a single day's bar; the color picker row consists of the same bars.
     private var markerHeight: Double { desktop.appearance.lineHeight * Self.markerHeightFactor }
-    /// Ширина места под стрелку заметки в конце строки.
+    /// Width of the room for the note arrow at the end of the line.
     private static let noteArrowWidth = 20.0
 
-    /// Косая стрелка в конце строки. Нет ссылки: бледная кнопка только в edit, по нажатию заметка связывается с днём.
-    /// Есть ссылка: стрелка видна всегда, в scroll и edit открывает заметку (в locked клики проходят сквозь окно);
-    /// убрать ссылку можно только в edit.
+    /// Diagonal arrow at the end of the line. No link: a pale button only in edit, clicking it links a note to the day.
+    /// With a link: the arrow is always visible, in scroll and edit it opens the note (in locked clicks pass through the window);
+    /// the link can be removed only in edit.
     @ViewBuilder private func noteArrow(_ day: Date) -> some View {
         let key = DayStore.key(for: day)
         let hasNote = entries[key]?.note != nil
         let isEdit = desktop.mode == .edit
         let isActive = hasNote ? (desktop.mode == .scroll || isEdit) : isEdit
-        // Кнопка есть в строке всегда, а в нужных режимах только проявляется: если вставлять её при входе в edit,
-        // в каждой видимой строке появляется новый вид в тот же момент, когда меняются поля ввода (гипотеза мигания).
+        // The button is always in the row, and in the needed modes it only fades in: if it were inserted on entering edit,
+        // every visible row would get a new view at the same moment the input fields change (a flicker hypothesis).
         Group {
             Button { openOrLinkNote(day) } label: {
                 Image(systemName: "arrow.up.right")
@@ -565,8 +565,8 @@ struct ContentView: View {
         }
     }
 
-    /// Есть ссылка — открывает заметку. Нет — связывает день с заметкой: Obsidian и Apple Notes создают заметку дня
-    /// (если её нет) и открывают её.
+    /// With a link — opens the note. Without — links the day to a note: Obsidian and Apple Notes create the day's note
+    /// (if there is none) and open it.
     private func openOrLinkNote(_ day: Date) {
         if let link = entries[DayStore.key(for: day)]?.note {
             if link.hasPrefix(AppleNotes.prefix) {
@@ -579,7 +579,7 @@ struct ContentView: View {
         switch desktop.appearance.noteApp {
         case .obsidian, .manual:
             guard let urls = desktop.appearance.noteTargets(for: day) else { NSSound.beep(); return }
-            // Для пути к файлу: создаёт файл, если его нет (для ссылок ничего не делает).
+            // For a file path: creates the file if it does not exist (does nothing for links).
             desktop.appearance.createNoteFileIfNeeded(urls.open)
             setNote(urls.open.absoluteString, for: day)
             NSWorkspace.shared.open(urls.create ?? urls.open)
@@ -587,7 +587,7 @@ struct ContentView: View {
             let name = MomentFormat.string(from: day, pattern: desktop.appearance.appleNotesFormat)
             let folder = desktop.appearance.appleNotesFolder
             Task {
-                // Notes создаёт заметку дня (если её нет) и открывает её; id заметки запоминается в записи дня.
+                // Notes creates the day's note (if there is none) and opens it; the note id is stored in the day's entry.
                 guard let id = await AppleNotes.openOrCreate(name: name, folder: folder), !id.isEmpty else {
                     NSSound.beep()
                     return
@@ -597,7 +597,7 @@ struct ContentView: View {
         }
     }
 
-    /// Сохраняет ссылку на заметку дня сразу в файл (nil убирает её).
+    /// Saves the day's note link to the file right away (nil removes it).
     private func setNote(_ note: String?, for day: Date) {
         let key = DayStore.key(for: day)
         var entry = entries[key] ?? DayEntry(text: "")
@@ -606,18 +606,18 @@ struct ContentView: View {
         try? DayStore().setNote(note, for: key)
     }
 
-    /// Диаметр кружка календаря перед событием.
+    /// Diameter of the calendar dot before an event.
     private static let eventDot = 5.0
-    /// Прозрачность события относительно записи дня.
+    /// Opacity of an event relative to the day's entry.
     private static let eventOpacity = 0.65
-    /// Промежуток между колонкой даты, индикатором и записью.
+    /// Gap between the date column, the indicator and the entry.
     private static let dotGap = 4.0
-    /// Левый край индикатора: сразу за колонкой даты, перед записью.
+    /// Left edge of the indicator: right after the date column, before the entry.
     private var dotX: Double { desktop.appearance.dateColumnWidth + Self.dotGap }
 
-    /// Высота центра индикатора в строке: визуальный центр заглавных букв и цифр первой строки записи
-    /// (середина между базовой линией и верхом заглавных), где стоит дата. Не геометрический центр строки:
-    /// у большинства шрифтов он выше или ниже и планка выглядела бы сдвинутой.
+    /// Height of the indicator's center in the row: the visual center of capital letters and digits of the entry's first line
+    /// (the middle between the baseline and the cap height), where the date sits. Not the geometric center of the row:
+    /// in most fonts it is higher or lower and the bar would look shifted.
     private func centerY(in height: Double) -> Double {
         desktop.appearance.rowPadding + desktop.appearance.capCenter
     }
@@ -626,17 +626,17 @@ struct ContentView: View {
         entries[DayStore.key(for: day)]?.color.flatMap { Appearance.indicatorColors.indices.contains($0) ? $0 : nil }
     }
 
-    /// Перед этим днём стоит заголовок месяца или увеличенный отступ недели: период через него не тянется.
+    /// This day is preceded by a month heading or a larger week gap: the period does not stretch through it.
     private func startsBlock(_ day: Date) -> Bool {
         isMonthStart(day) || (desktop.appearance.weekGap && isMonday(day))
     }
 
-    /// Круглый индикатор в начале строки. Соседние дни одного цвета сливаются в одну полосу с круглыми концами.
-    /// В edit у дня без цвета виден бледный контур, по клику на него раскрывается выбор цвета.
+    /// Round indicator at the start of the line. Neighboring days of the same color merge into one bar with rounded ends.
+    /// In edit a day without a color shows a pale outline; clicking it opens the color picker.
     @ViewBuilder private func indicator(for day: Date) -> some View {
         let w = Self.dotWidth
         let cap = w / 2
-        // Половина высоты одиночного индикатора.
+        // Half the height of a single indicator.
         let half = markerHeight / 2
         let color = indicatorColor(day)
         let isEdit = desktop.mode == .edit
@@ -677,12 +677,12 @@ struct ContentView: View {
                 .offset(x: dotX - 6)
             }
         }
-        // Форма полосы (концы, длина) меняется у соседей сразу при выборе цвета. Без этого SwiftUI «дорисовывает»
-        // её анимацией, и круглые концы и высота плывут по-разному в соседних строках: меняем мгновенно.
+        // The bar's shape (ends, length) changes on neighbors at once when a color is chosen. Without this SwiftUI "finishes drawing"
+        // it with an animation, and the rounded ends and height drift differently in neighboring rows: we change instantly.
         .transaction { $0.animation = nil }
     }
 
-    /// Ставит цвет дню и сразу пишет его в файл.
+    /// Sets the day's color and writes it to the file right away.
     private func choose(_ index: Int?, for day: Date) {
         let key = DayStore.key(for: day)
         var entry = entries[key] ?? DayEntry(text: "")
@@ -692,20 +692,20 @@ struct ContentView: View {
         closePicker(for: day)
     }
 
-    /// Закрывает ряд цветов и возвращает курсор в поле этого дня (на время выбора поля нет).
+    /// Closes the color row and returns the caret to this day's field (there is no field while choosing).
     private func closePicker(for day: Date) {
         withAnimation(.easeOut(duration: 0.2)) { pickerDay = nil }
         Task {
             try? await Task.sleep(for: .milliseconds(50))
             guard desktop.mode == .edit, pickerDay == nil else { return }
-            // Поле при фокусе выделяет весь текст; клик по цвету только что был вводом, поэтому говорим окну,
-            // что выделение надо свернуть сразу (курсор в конце), иначе оно мигнёт.
+            // The field selects all text on focus; the click on a color was just input, so we tell the window
+            // that the selection must be collapsed right away (caret at the end), otherwise it will flicker.
             desktop.expectProgrammaticFocus()
             focusedDay = day
         }
     }
 
-    /// Полоса сегодняшнего дня: выходит влево за текст (в отступ окна) и плавно уходит в прозрачность по краям.
+    /// Today's bar: extends to the left beyond the text (into the window padding) and fades to transparent at the edges.
     private var todayHighlight: some View {
         let color = desktop.appearance.highlightColor
         return LinearGradient(
@@ -719,7 +719,7 @@ struct ContentView: View {
         .padding(.leading, -Self.highlightInset)
     }
 
-    /// Верхний полностью видимый день (индекс зажат в границы: набор дней мог смениться).
+    /// The topmost fully visible day (the index is clamped to bounds: the set of days may have changed).
     private var topVisibleDay: Date {
         days[min(visibleRange.lowerBound, days.count - 1)]
     }
@@ -752,9 +752,9 @@ struct ContentView: View {
             })
     }
 
-    /// Файл пишется через полторы секунды после последней буквы, а не на каждую (иначе каждый символ перезаписывает
-    /// весь файл и гоняет синхронизацию iCloud). Дальше сброс при выходе из edit, при перечитывании файла и при выходе
-    /// из приложения (`flushPending`), так что потерять можно не больше последних секунд при сбое.
+    /// The file is written one and a half seconds after the last letter, not on each one (otherwise every character rewrites
+    /// the whole file and drives iCloud sync). Then a flush on leaving edit, on rereading the file and on quitting
+    /// the app (`flushPending`), so at most the last few seconds can be lost on a crash.
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task {
@@ -764,11 +764,11 @@ struct ContentView: View {
         }
     }
 
-    /// Ставит курсор в поле заново: на сегодня, если оно на экране, иначе на верхний видимый день.
+    /// Places the caret in the field again: on today if it is on screen, otherwise on the topmost visible day.
     private func focusEditor() {
         focusedDay = nil
-        // Предыдущая попытка отменяется: иначе каждое didBecomeKey (в том числе от переоткрытия окна в refreshCaret)
-        // запускало бы ещё один цикл, циклы копились, переоткрывали окно друг за другом, и лента мигала.
+        // The previous attempt is cancelled: otherwise every didBecomeKey (including from reopening the window in refreshCaret)
+        // would start another loop, the loops piled up, reopened the window one after another, and the feed flickered.
         focusTask?.cancel()
         focusTask = Task {
             await Task.yield()
@@ -776,8 +776,8 @@ struct ContentView: View {
             let todayIsVisible = days.firstIndex(of: today).map(visibleRange.contains) ?? false
             focusedDay = editingDay.flatMap { days.contains($0) ? $0 : nil }
                 ?? (todayIsVisible ? today : topVisibleDay)
-            // Фокус уже стоит, но курсор при повторном входе в edit может не нарисоваться, пока окно не стало key:
-            // повторяем попытку (до секунды), пока курсор не заработает.
+            // Focus is already set, but on re-entering edit the caret may not be drawn until the window is key:
+            // we retry (up to a second) until the caret works.
             for attempt in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled, desktop.mode == .edit else { return }
@@ -786,10 +786,10 @@ struct ContentView: View {
         }
     }
 
-    /// Переносит фокус на соседний день (вызывается из монитора клавиш окна).
+    /// Moves focus to the neighboring day (called from the window's key monitor).
     private func move(by step: Int, proxy: ScrollViewProxy) {
         guard let current = focusedDay, let index = days.firstIndex(of: current) else { return }
-        // Месяц и неделя: за краем отрезка идёт соседний отрезок, как в ленте.
+        // Month and week: past the edge of the span comes the neighboring span, as in the feed.
         if !days.indices.contains(index + step) {
             if desktop.appearance.viewKind.isPaged {
                 pendingEdge = step
@@ -799,8 +799,8 @@ struct ContentView: View {
         }
         let target = index + step
         focusedDay = days[target]
-        // Лента стоит, пока фокус идёт по окну. У края она едет вслед по одной строке: показываем строку на
-        // `margin` дальше фокуса, так фокус не доходит до края, а строки перед ним уже отрисованы (лента ленивая).
+        // The feed stands still while focus walks through the window. At the edge it follows one row at a time: we show the row
+        // `margin` beyond the focus, so focus does not reach the edge and the rows before it are already drawn (the feed is lazy).
         let margin = 4
         if target < visibleRange.lowerBound + margin || target > visibleRange.upperBound - margin {
             let ahead = min(max(target + step * margin, 0), days.count - 1)
@@ -808,26 +808,26 @@ struct ContentView: View {
         }
     }
 
-    /// Перечитывает файл, если он изменился с прошлого чтения. В edit не трогаем: пользователь печатает,
-    /// а свои записи он уже сохранил.
+    /// Rereads the file if it changed since the last read. We do not touch it in edit: the user is typing,
+    /// and they have already saved their own entries.
     private func syncIfFileChanged() {
         if desktop.mode != .edit, DayStore().modificationDate != fileStamp { reload() }
     }
 
     private func reload() {
-        // Несохранённый текст уходит в файл до перечитывания, иначе его затёрли бы записи из файла.
+        // Unsaved text goes to the file before rereading, otherwise it would be overwritten by the file's entries.
         flush()
         let store = DayStore()
         do {
             entries = try store.load()
             dataProblem = nil
         } catch {
-            // Не прочиталось (файл скачивается из iCloud или повреждён): остаются прежние записи, а не пустая лента,
-            // и в углу окна появляется предупреждение.
+            // Could not be read (the file is downloading from iCloud or corrupted): the previous entries stay instead of an empty feed,
+            // and a warning appears in the corner of the window.
             dataProblem = DayStore.problemText(for: error)
         }
         fileStamp = store.modificationDate
-        // Начало ленты зависит от самой ранней записи; меняем массив, только если границы сдвинулись.
+        // The start of the feed depends on the earliest entry; we change the array only if the bounds moved.
         let newDays = buildDays()
         if newDays != days { days = newDays }
         loadEvents()
@@ -839,7 +839,7 @@ struct ContentView: View {
                          kind: kind.isPaged ? kind : .feed, offset: periodOffset)
     }
 
-    /// Набор дней сменился: курсор edit и видимый диапазон относились к прежнему набору.
+    /// The set of days changed: the edit caret and the visible range referred to the previous set.
     private func rebuildDays(_ proxy: ScrollViewProxy) {
         days = buildDays()
         loadEvents()
@@ -849,7 +849,7 @@ struct ContentView: View {
         pickerDay = nil
         if !desktop.appearance.viewKind.isPaged {
             scrollHome(proxy)
-            // Ленивая лента точно встаёт на место только после отрисовки: прокручиваем с паузой.
+            // A lazy feed settles exactly only after drawing: we scroll with a pause.
             Task {
                 try? await Task.sleep(for: .milliseconds(150))
                 scrollHome(proxy)
@@ -864,7 +864,7 @@ struct ContentView: View {
         }
     }
 
-    /// Пишет день в файл. Если запись не удалась, день остаётся в dirty и сохранится при следующей попытке.
+    /// Writes the day to the file. If the write fails, the day stays in dirty and is saved on the next attempt.
     private func save(_ key: String) {
         guard dirty.contains(key) else { return }
         do {

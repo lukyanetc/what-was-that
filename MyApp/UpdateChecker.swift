@@ -1,8 +1,8 @@
 import AppKit
 
-/// Проверка обновлений через GitHub Releases: последний релиз репозитория сравнивается с текущей версией.
-/// Ничего не скачивает и не устанавливает: при новой версии открывается страница релиза. Запрос уходит только по кнопке
-/// «Check for Updates…» или при запуске (если включено, не чаще раза в сутки); в запросе нет ничего о пользователе.
+/// Update check via GitHub Releases: the repository's latest release is compared with the current version.
+/// It downloads and installs nothing: if there is a new version, the release page opens. A request is sent only on the
+/// "Check for Updates…" button or at launch (if enabled, at most once a day); the request contains nothing about the user.
 @MainActor
 final class UpdateChecker {
     enum Outcome: Equatable {
@@ -18,14 +18,14 @@ final class UpdateChecker {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     }
 
-    /// Число компонентов версии: «v1.2.10» → [1, 2, 10]; нечисловой хвост («-beta») отбрасывается.
+    /// Number of version components: "v1.2.10" → [1, 2, 10]; a non-numeric tail ("-beta") is dropped.
     nonisolated static func components(_ version: String) -> [Int] {
         version.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
             .split(separator: ".")
             .map { Int($0.prefix { $0.isNumber }) ?? 0 }
     }
 
-    /// Версия `remote` новее `local` (недостающие компоненты считаются нулями: 1.2 и 1.2.0 равны).
+    /// `remote` version is newer than `local` (missing components count as zeros: 1.2 and 1.2.0 are equal).
     nonisolated static func isNewer(_ remote: String, than local: String) -> Bool {
         let a = components(remote), b = components(local)
         for index in 0..<max(a.count, b.count) {
@@ -40,7 +40,7 @@ final class UpdateChecker {
         let html_url: URL
     }
 
-    /// Тег и страница релиза из ответа GitHub.
+    /// Tag and release page from the GitHub response.
     nonisolated static func parse(_ data: Data) -> (tag: String, page: URL)? {
         (try? JSONDecoder().decode(Release.self, from: data)).map { ($0.tag_name, $0.html_url) }
     }
@@ -57,12 +57,12 @@ final class UpdateChecker {
             : .upToDate(current: Self.currentVersion)
     }
 
-    /// Кнопка «Check for Updates…»: всегда отвечает окном.
+    /// "Check for Updates…" button: always answers with a window.
     func checkManually() {
         Task { show(await check(), isManual: true) }
     }
 
-    /// Проверка при запуске: не чаще раза в сутки, через несколько секунд после старта, и молчит, если новостей нет.
+    /// Check at launch: at most once a day, a few seconds after start, and silent if there is nothing new.
     func checkAtLaunch() async {
         let defaults = UserDefaults.standard
         let last = defaults.object(forKey: "lastUpdateCheck") as? Date ?? .distantPast
@@ -77,7 +77,7 @@ final class UpdateChecker {
         let alert = NSAlert()
         switch outcome {
         case .available(let version, let page):
-            // При запуске об одной и той же версии напоминаем один раз.
+            // At launch, remind about the same version only once.
             let defaults = UserDefaults.standard
             if !isManual {
                 guard defaults.string(forKey: "lastNotifiedVersion") != version else { return }

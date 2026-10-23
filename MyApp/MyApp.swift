@@ -17,8 +17,8 @@ private struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // Режимы и виды сразу в меню (без выпадающих списков), у текущего галочка. В заголовке подсказка хоткея.
-        // Заголовки это обычные строки, а не Section и не Picker: те сами рисуют разделители вокруг своих пунктов.
+        // Modes and views go straight into the menu (no drop-down lists), the current one has a checkmark. The title shows the hotkey hint.
+        // Headings are plain strings, not Section or Picker: those draw separators around their own items.
         Text("Mode · \(desktop.appearance.hotKeyLabel), Esc → locked")
         ForEach(Mode.allCases, id: \.self) { mode in
             Toggle(mode.rawValue, isOn: Binding(get: { desktop.mode == mode }, set: { _ in desktop.mode = mode }))
@@ -40,12 +40,12 @@ private struct MenuContent: View {
         Button("Settings…") {
             openWindow(id: "settings")
             NSApp.activate()
-            // При вызове окно настроек выходит поверх остальных, а дальше ведёт себя как обычное окно (уровень не меняется).
-            // Оно появляется не мгновенно, поэтому с паузой.
+            // When invoked, the settings window comes to the front and then behaves like a normal window (the level does not change).
+            // It does not appear instantly, hence the delay.
             Task {
                 try? await Task.sleep(for: .milliseconds(100))
                 for window in NSApp.windows where window.title == "what was that!? - settings" {
-                    // Окно выходит на том рабочем столе (Space), где его вызвали, а не остаётся на прежнем.
+                    // The window opens on the Space where it was invoked instead of staying on the previous one.
                     window.collectionBehavior.insert(.moveToActiveSpace)
                     window.makeKeyAndOrderFront(nil)
                     window.orderFrontRegardless()
@@ -62,7 +62,7 @@ private struct MenuContent: View {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
-        // Значок в строке меню: свой шаблонный рисунок (18 и 36 px), macOS сама красит его под светлую и тёмную строку.
+        // Menu bar icon: a custom template image (18 and 36 px); macOS tints it for the light or dark menu bar.
         MenuBarExtra("what was that!?", image: "MenuBarIcon") {
             MenuContent(desktop: delegate.desktop)
         }
@@ -70,7 +70,7 @@ private struct MenuContent: View {
             SettingsView(desktop: delegate.desktop)
         }
         .windowResizability(.contentSize)
-        // Окно настроек можно таскать за любое свободное место (полосу закладок, фон), а не только за заголовок.
+        // The settings window can be dragged by any free area (tab strip, background), not only by the title bar.
         .windowBackgroundDragBehavior(.enabled)
         .defaultLaunchBehavior(.suppressed)
     }

@@ -1,9 +1,9 @@
 import SwiftUI
 import Carbon.HIToolbox
 
-/// Какой отрезок времени показывает окно: непрерывная лента, календарный месяц или неделя (пн–вс).
+/// The time span the window shows: a continuous feed, a calendar month or a week (Mon–Sun).
 enum ViewKind: String, CaseIterable {
-    // Порядок в меню и в настройках: Range рядом с Feed, Month и Week дальше (у них своя роль).
+    // Order in the menu and in settings: Range next to Feed, Month and Week after (they have their own role).
     case feed, period, month, week
 
     var title: String {
@@ -15,11 +15,11 @@ enum ViewKind: String, CaseIterable {
         }
     }
 
-    /// Месяц и неделя листаются по отрезкам; лента и период нет.
+    /// Month and week page by span; the feed and period do not.
     var isPaged: Bool { self == .month || self == .week }
 }
 
-/// Заметочник, в котором открывается заметка дня.
+/// The notes app in which the day's note opens.
 enum NoteApp: String, CaseIterable {
     case obsidian, appleNotes, manual
 
@@ -32,32 +32,32 @@ enum NoteApp: String, CaseIterable {
     }
 }
 
-/// Внешний вид: цвет текста (с подстройкой под яркость обоев под лентой), прозрачность, ширина окна,
-/// линия выделения сегодняшнего дня, формат даты и заголовков месяцев. Всё хранится в UserDefaults.
+/// Appearance: text color (adjusted to the brightness of the wallpaper under the feed), opacity, window width,
+/// the highlight line of today, the date and month heading formats. Everything is stored in UserDefaults.
 @Observable final class Appearance {
-    /// Показываемый отрезок времени.
+    /// The time span shown.
     var viewKind: ViewKind {
         didSet {
             UserDefaults.standard.set(viewKind.rawValue, forKey: "viewKind")
             onLayoutChange?()
         }
     }
-    /// Выбранный пользователем цвет (оттенок).
+    /// Color chosen by the user (hue).
     var color: Color { didSet { UserDefaults.standard.set(color.hex, forKey: "textColor") } }
-    /// Подстраивать светлоту цвета под обои.
+    /// Adjust the lightness of the color to the wallpaper.
     var adapts: Bool { didSet { UserDefaults.standard.set(adapts, forKey: "adaptsToWallpaper") } }
-    /// Прозрачность текста, 0.2 ... 1.
+    /// Text opacity, 0.2 ... 1.
     var textOpacity: Double { didSet { UserDefaults.standard.set(textOpacity, forKey: "textOpacity") } }
-    /// Ширина окна (длина строки).
+    /// Window width (line length).
     var width: Double {
         didSet {
             UserDefaults.standard.set(width, forKey: "windowWidth")
             onLayoutChange?()
         }
     }
-    /// Высота затухания ленты у верхнего и нижнего края окна, pt.
+    /// Height of the feed fade at the top and bottom edge of the window, pt.
     var edgeFade: Double { didSet { UserDefaults.standard.set(edgeFade, forKey: "edgeFade") } }
-    /// Персональные периоды (UserDefaults, JSON). Линии и названия видны во всех видах; режим «Период» показывает активный.
+    /// Personal periods (UserDefaults, JSON). Lines and titles are visible in all views; "Period" mode shows the active one.
     var periods: [Period] {
         didSet {
             UserDefaults.standard.set(try? JSONEncoder().encode(periods), forKey: "periods")
@@ -65,24 +65,24 @@ enum NoteApp: String, CaseIterable {
             onLayoutChange?()
         }
     }
-    /// Показывать ли периоды в режиме «Лента». В режиме «Период» они видны всегда, в «Месяце» и «Неделе» их нет.
+    /// Whether to show periods in "Feed" mode. In "Period" mode they are always visible, in "Month" and "Week" they are absent.
     var showsPeriodsInFeed: Bool { didSet { UserDefaults.standard.set(showsPeriodsInFeed, forKey: "showsPeriodsInFeed") } }
-    /// Счётчик дней под названием идущего периода («12 / 90»).
+    /// Day counter under the title of the running period ("12 / 90").
     var showsPeriodCounter: Bool {
         didSet {
             UserDefaults.standard.set(showsPeriodCounter, forKey: "showsPeriodCounter")
             updatePeriodMetrics()
         }
     }
-    /// Отступ первого дня периода от верха окна, pt; в режиме «Переместить окно» двигается мышью по вертикали.
-    /// По умолчанию период стоит ближе к середине экрана (30% высоты).
+    /// Offset of the period's first day from the top of the window, pt; in "Move window" mode it is moved vertically with the mouse.
+    /// By default the period sits closer to the middle of the screen (30% of the height).
     var periodOffset: Double { didSet { UserDefaults.standard.set(periodOffset, forKey: "periodOffset") } }
 
-    /// Место под период в окне: от его начала до низа экрана за вычетом затухания.
+    /// Room for the period in the window: from its start to the bottom of the screen minus the fade.
     func periodRoom(screenHeight: Double) -> Double { screenHeight - periodOffset - edgeFade }
 
-    /// Оценка высоты периода в ленте: строки, заголовки месяцев и отступы недель. Нужна настройкам, чтобы
-    /// предупредить, что период не поместится в окно (в самом окне высота измеряется).
+    /// Estimate of the period's height in the feed: rows, month headings and week gaps. Settings need it to
+    /// warn that the period will not fit in the window (the window itself measures the height).
     func estimatedHeight(of period: Period) -> Double {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: period.start)
@@ -99,38 +99,38 @@ enum NoteApp: String, CaseIterable {
         return height
     }
 
-    /// «12 / 90» для идущего периода, если счётчик включён.
+    /// "12 / 90" for the running period, if the counter is on.
     func counterText(_ period: Period) -> String? {
         guard showsPeriodCounter, period.contains(.now) else { return nil }
         return "\(period.dayNumber(on: .now)) / \(period.dayCount)"
     }
 
-    /// Рисуются ли сейчас линии и названия периодов.
+    /// Whether period lines and titles are being drawn now.
     var showsPeriodMarks: Bool {
         !periods.isEmpty && (viewKind == .period || (viewKind == .feed && showsPeriodsInFeed))
     }
-    /// Колонка линии каждого периода (0 ближе к датам) и ширина колонки названий; пересчитываются при смене
-    /// списка, шрифта и регистра, а не при каждой отрисовке строки.
+    /// Line column of each period (0 is closer to the dates) and the width of the titles column; recomputed when the
+    /// list, font and case change, not on every row render.
     private(set) var periodLanes: [UUID: Int] = [:]
     private(set) var periodTitleWidth = 0.0
     static let maxTitleWidth = 96.0
-    /// Период, который показывает режим «Период»: самый длинный из идущих сегодня (остальные идут внутри него).
+    /// The period shown by "Period" mode: the longest of those running today (the others go inside it).
     var activePeriod: Period? { Period.longest(in: periods, on: .now) }
-    /// Цвет и прозрачность линии выделения сегодняшнего дня; nil — цвет текста с прозрачностью 15%.
+    /// Color and opacity of today's highlight line; nil means the text color at 15% opacity.
     var highlight: Color? { didSet { UserDefaults.standard.set(highlight?.hex, forKey: "highlightColor") } }
-    /// Формат даты в строке дня (в духе moment.js, см. MomentFormat).
+    /// Date format in a day row (moment.js style, see MomentFormat).
     var dateFormat: String {
         didSet {
             UserDefaults.standard.set(dateFormat, forKey: "dateFormatPattern")
             dateColumnWidth = measureDateColumn()
         }
     }
-    /// Показывать ли заголовки месяцев и в каком формате.
+    /// Whether to show month headings and in which format.
     var showsMonth: Bool { didSet { UserDefaults.standard.set(showsMonth, forKey: "showsMonth") } }
     var monthFormat: String { didSet { UserDefaults.standard.set(monthFormat, forKey: "monthFormatPattern") } }
-    /// Заголовок месяца жирным шрифтом.
+    /// Month heading in bold.
     var monthBold: Bool { didSet { UserDefaults.standard.set(monthBold, forKey: "monthBold") } }
-    /// Дата и месяц заглавными буквами.
+    /// Date and month in uppercase.
     var uppercase: Bool {
         didSet {
             UserDefaults.standard.set(uppercase, forKey: "uppercase")
@@ -138,7 +138,7 @@ enum NoteApp: String, CaseIterable {
             updatePeriodMetrics()
         }
     }
-    /// Шрифт ленты: семейство из `fonts` или `systemFont` (системный моноширинный).
+    /// Feed font: a family from `fonts` or `systemFont` (system monospaced).
     var fontName: String {
         didSet {
             UserDefaults.standard.set(fontName, forKey: "fontName")
@@ -146,7 +146,7 @@ enum NoteApp: String, CaseIterable {
             updatePeriodMetrics()
         }
     }
-    /// Размер основного шрифта, pt (по умолчанию 13, как у `.body`).
+    /// Size of the main font, pt (13 by default, like `.body`).
     var fontSize: Double {
         didSet {
             UserDefaults.standard.set(fontSize, forKey: "fontSize")
@@ -154,42 +154,42 @@ enum NoteApp: String, CaseIterable {
             updatePeriodMetrics()
         }
     }
-    /// Вертикальный отступ сверху и снизу внутри строки дня, pt; расстояние между строками вдвое больше.
+    /// Vertical padding above and below inside a day row, pt; the gap between rows is twice as large.
     var rowPadding: Double { didSet { UserDefaults.standard.set(rowPadding, forKey: "rowPadding") } }
-    /// Ширина колонки даты, см. `measureDateColumn`.
+    /// Width of the date column, see `measureDateColumn`.
     private(set) var dateColumnWidth = 0.0
-    /// Номер недели (ISO) справа в строке понедельника.
+    /// Week number (ISO) on the right in the Monday row.
     var showsWeekNumber: Bool { didSet { UserDefaults.standard.set(showsWeekNumber, forKey: "showsWeekNumber") } }
-    /// Увеличенный отступ перед каждым понедельником.
+    /// Larger gap before every Monday.
     var weekGap: Bool { didSet { UserDefaults.standard.set(weekGap, forKey: "weekGap") } }
-    /// Как показывать события календаря и из каких календарей (идентификаторы EventKit).
+    /// How to show calendar events and from which calendars (EventKit identifiers).
     var eventsMode: EventsMode { didSet { UserDefaults.standard.set(eventsMode.rawValue, forKey: "eventsMode") } }
-    /// Приоритет календарей (порядок в списке настроек): идентификаторы, первый показывается выше.
+    /// Calendar priority (order in the settings list): identifiers, the first is shown higher.
     var eventCalendarOrder: [String] {
         didSet { UserDefaults.standard.set(eventCalendarOrder, forKey: "eventCalendarOrder") }
     }
     var eventCalendarIDs: Set<String> {
         didSet { UserDefaults.standard.set(Array(eventCalendarIDs), forKey: "eventCalendarIDs") }
     }
-    /// Заметочник и настройки Obsidian: хранилище, папка и формат имени файла (в духе moment.js).
+    /// Notes app and Obsidian settings: vault, folder and file name format (moment.js style).
     var noteApp: NoteApp { didSet { UserDefaults.standard.set(noteApp.rawValue, forKey: "noteApp") } }
     var obsidianVault: String { didSet { UserDefaults.standard.set(obsidianVault, forKey: "obsidianVault") } }
     var obsidianFolder: String { didSet { UserDefaults.standard.set(obsidianFolder, forKey: "obsidianFolder") } }
     var obsidianFileFormat: String {
         didSet { UserDefaults.standard.set(obsidianFileFormat, forKey: "obsidianFileFormat") }
     }
-    /// Apple Notes: папка (пусто — папка по умолчанию) и формат имени заметки дня.
+    /// Apple Notes: folder (empty means the default folder) and the day's note name format.
     var appleNotesFolder: String { didSet { UserDefaults.standard.set(appleNotesFolder, forKey: "appleNotesFolder") } }
     var appleNotesFormat: String { didSet { UserDefaults.standard.set(appleNotesFormat, forKey: "appleNotesFormat") } }
-    /// Проверять обновления при запуске (не чаще раза в сутки).
+    /// Check for updates at launch (at most once a day).
     var checksUpdatesAtLaunch: Bool {
         didSet { UserDefaults.standard.set(checksUpdatesAtLaunch, forKey: "checksUpdatesAtLaunch") }
     }
-    /// Глобальный хоткей: код клавиши, модификаторы Carbon и подпись для показа («⌥M»). Меняется через `setHotKey`.
+    /// Global hotkey: key code, Carbon modifiers and a label for display ("⌥M"). Changed via `setHotKey`.
     var hotKeyCode: Int { didSet { UserDefaults.standard.set(hotKeyCode, forKey: "hotKeyCode") } }
     var hotKeyModifiers: Int { didSet { UserDefaults.standard.set(hotKeyModifiers, forKey: "hotKeyModifiers") } }
     var hotKeyLabel: String { didSet { UserDefaults.standard.set(hotKeyLabel, forKey: "hotKeyLabel") } }
-    /// Вызывается после смены хоткея: контроллер перерегистрирует его.
+    /// Called after the hotkey changes: the controller re-registers it.
     @ObservationIgnored var onHotKeyChange: (() -> Void)?
     /// Opt+M.
     static let defaultHotKey = (code: kVK_ANSI_M, modifiers: optionKey, label: "⌥M")
@@ -201,32 +201,32 @@ enum NoteApp: String, CaseIterable {
         onHotKeyChange?()
     }
 
-    /// «Другой (вручную)»: шаблон ссылки (`scheme://…`) или пути к файлу (`/…`, `~/…`); `{формат даты}` заменяется
-    /// датой дня (как в moment.js).
+    /// "Other (manual)": a link template (`scheme://…`) or a file path (`/…`, `~/…`); `{date format}` is replaced
+    /// with the day's date (as in moment.js).
     var noteTemplate: String { didSet { UserDefaults.standard.set(noteTemplate, forKey: "noteTemplate") } }
-    /// Яркость обоев под лентой, 0 (чёрные) ... 1 (белые).
+    /// Brightness of the wallpaper under the feed, 0 (black) ... 1 (white).
     private(set) var luminance = 0.2
-    /// Удалось ли измерить обои (иначе яркость выводится из тёмной/светлой темы системы).
+    /// Whether the wallpaper could be measured (otherwise brightness is derived from the system dark/light theme).
     private(set) var isMeasured = false
-    /// Вызывается при смене ширины или отрезка времени: окно подгоняется под них.
+    /// Called when the width or time span changes: the window is fitted to them.
     @ObservationIgnored var onLayoutChange: (() -> Void)?
 
     static let widthRange = 240.0...800.0
     static let fontSizeRange = 10.0...24.0
     static let rowPaddingRange = 0.0...6.0
-    /// 9 пастельных цветов индикатора дня (оттенок, насыщенность 0.52, яркость 0.95); в файле хранится номер.
+    /// 9 pastel colors of the day indicator (hue, saturation 0.52, brightness 0.95); the file stores the number.
     static let indicatorColors: [Color] = [0.0, 0.07, 0.14, 0.33, 0.48, 0.6, 0.75, 0.9]
         .map { Color(hue: $0, saturation: 0.52, brightness: 0.95) } + [Color(white: 0.75)]
-    /// Прозрачность, с которой цвета индикатора показываются в ленте и в ряду выбора.
+    /// Opacity with which indicator colors are shown in the feed and in the color picker row.
     static let indicatorOpacity = 0.65
 
     static let systemFont = "System"
-    /// Шрифт по умолчанию (первый запуск): встроенный JetBrains Mono.
+    /// Default font (first launch): the bundled JetBrains Mono.
     static let defaultFont = "JetBrains Mono"
-    /// Встроенные шрифты Google Fonts (лицензия OFL, файлы в MyApp/Fonts), все с кириллицей.
+    /// Bundled Google Fonts (OFL license, files in MyApp/Fonts), all with Cyrillic.
     static let fonts = ["JetBrains Mono", "IBM Plex Mono", "Fira Code", "Geist Mono"]
 
-    /// Регистрирует встроенные шрифты в процессе (один раз).
+    /// Registers the bundled fonts in the process (once).
     private static let registerFonts: Void = {
         let urls = Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil) ?? []
         CTFontManagerRegisterFontsForURLs(urls as CFArray, .process, nil)
@@ -235,7 +235,7 @@ enum NoteApp: String, CaseIterable {
     init() {
         _ = Self.registerFonts
         let defaults = UserDefaults.standard
-        // Сохранённый шрифт, которого больше нет в списке (например, убранный Inter), заменяется системным.
+        // A saved font that is no longer in the list (for example, the removed Inter) is replaced with the system one.
         let savedFont = defaults.string(forKey: "fontName") ?? Self.defaultFont
         fontName = savedFont == Self.systemFont || Self.fonts.contains(savedFont) ? savedFont : Self.systemFont
         fontSize = defaults.object(forKey: "fontSize") as? Double ?? 14
@@ -281,7 +281,7 @@ enum NoteApp: String, CaseIterable {
         return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
     }
 
-    /// Подставляет в шаблон дату: каждое `{формат}` заменяется днём в этом формате (как в moment.js).
+    /// Substitutes the date into the template: each `{format}` is replaced with the day in that format (as in moment.js).
     private func fill(_ template: String, day: Date, encoded: Bool) -> String {
         var result = "", rest = Substring(template)
         while let open = rest.firstIndex(of: "{"), let close = rest[open...].firstIndex(of: "}") {
@@ -293,8 +293,8 @@ enum NoteApp: String, CaseIterable {
         return result + rest
     }
 
-    /// Адреса заметки дня в выбранном заметочнике: по `open` она открывается, `create` (если есть) сначала создаёт её.
-    /// nil, пока заметочник не настроен. Apple Notes работает через AppleScript и сюда не входит.
+    /// URLs of the day's note in the chosen notes app: `open` opens it, `create` (if present) creates it first.
+    /// nil until a notes app is set up. Apple Notes works through AppleScript and is not covered here.
     func noteTargets(for day: Date) -> (create: URL?, open: URL)? {
         switch noteApp {
         case .obsidian:
@@ -303,28 +303,28 @@ enum NoteApp: String, CaseIterable {
             let folder = obsidianFolder.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
             let file = folder.isEmpty ? name : "\(folder)/\(name)"
             let query = "?vault=\(Self.percentEncoded(obsidianVault))&file=\(Self.percentEncoded(file))"
-            // append: если заметка дня уже есть, она не дублируется (поведение без append в документации не описано).
+            // append: if the day's note already exists it is not duplicated (behavior without append is not described in the documentation).
             guard let create = URL(string: "obsidian://new" + query + "&append=true"),
                   let open = URL(string: "obsidian://open" + query) else { return nil }
             return (create, open)
         case .manual:
             let template = noteTemplate.trimmingCharacters(in: .whitespaces)
             if template.hasPrefix("/") || template.hasPrefix("~") {
-                // Путь к файлу: имя подставляется как есть.
+                // File path: the name is substituted as is.
                 let path = (fill(template, day: day, encoded: false) as NSString).expandingTildeInPath
                 return (nil, URL(filePath: path))
             }
-            // Ссылка: значения в `{}` кодируются для адреса.
+            // Link: values in `{}` are encoded for the URL.
             return URL(string: fill(template, day: day, encoded: true)).flatMap { $0.scheme == nil ? nil : (nil, $0) }
         case .appleNotes:
             return nil
         }
     }
 
-    /// Шаблон на сегодняшнем дне (пример для настроек).
+    /// Template on today's date (an example for settings).
     var noteTemplateExample: String { noteTargets(for: .now)?.open.absoluteString ?? "" }
 
-    /// «Другой: файл»: создаёт файл заметки дня (и папки), если его ещё нет.
+    /// "Other: file": creates the day's note file (and folders) if it does not exist yet.
     func createNoteFileIfNeeded(_ url: URL) {
         guard url.isFileURL, !FileManager.default.fileExists(atPath: url.path()) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -333,31 +333,31 @@ enum NoteApp: String, CaseIterable {
 
     func weekText(_ date: Date) -> String { MomentFormat.string(from: date, pattern: "W") }
 
-    /// Основной шрифт ленты (размер как у `.body`).
+    /// Main feed font (size like `.body`).
     var font: Font { Font(nsFont(size: fontSize)) }
-    /// Мелкий шрифт (номер недели): 10/13 от основного, как `.caption` относительно `.body`.
+    /// Small font (week number): 10/13 of the main one, like `.caption` relative to `.body`.
     var smallFont: Font { Font(nsFont(size: (fontSize * 10 / 13).rounded())) }
 
-    /// Высота одной строки основного шрифта (для выравнивания индикатора по первой строке записи).
+    /// Height of one line of the main font (to align the indicator with the first line of an entry).
     var lineHeight: Double {
         let font = nsFont(size: fontSize)
         return font.ascender - font.descender + font.leading
     }
 
-    /// Расстояние от верха строки до визуального центра заглавных букв и цифр.
+    /// Distance from the top of a row to the visual center of capital letters and digits.
     var capCenter: Double {
         let font = nsFont(size: fontSize)
         return font.ascender - font.capHeight / 2
     }
 
-    /// То же для мелкого шрифта (события календаря).
+    /// Same for the small font (calendar events).
     var smallCapCenter: Double {
         let font = nsFont(size: (fontSize * 10 / 13).rounded())
         return font.ascender - font.capHeight / 2
     }
 
-    /// Собранные шрифты по размеру: сборка из дескриптора стоит десятки микросекунд, а строки ленты обращаются
-    /// к шрифту по нескольку раз при каждой перерисовке (на каждое нажатие стрелки в edit).
+    /// Built fonts by size: building from a descriptor costs tens of microseconds, but feed rows access
+    /// the font several times per redraw (on every arrow key press in edit).
     @ObservationIgnored private var fontCache: [Double: NSFont] = [:]
     @ObservationIgnored private var fontCacheName = ""
 
@@ -375,7 +375,7 @@ enum NoteApp: String, CaseIterable {
     private func makeFont(size: Double) -> NSFont {
         let system = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         guard fontName != Self.systemFont else { return system }
-        // Шрифты переменные: без явного веса семейство может открыться самым тонким начертанием.
+        // The fonts are variable: without an explicit weight the family may open in its thinnest style.
         let descriptor = NSFontDescriptor(fontAttributes: [
             .family: fontName,
             .traits: [NSFontDescriptor.TraitKey.weight: NSFont.Weight.regular.rawValue],
@@ -383,8 +383,8 @@ enum NoteApp: String, CaseIterable {
         return NSFont(descriptor: descriptor, size: size) ?? system
     }
 
-    /// Ширина колонки даты: самая широкая дата за год в текущем шрифте и формате. Нужна, чтобы все записи
-    /// начинались с одного места (и для пропорциональных шрифтов тоже).
+    /// Width of the date column: the widest date in a year in the current font and format. Needed so all entries
+    /// start at the same place (for proportional fonts too).
     private func measureDateColumn() -> Double {
         let calendar = Calendar.current
         let start = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)) ?? .now
@@ -394,7 +394,7 @@ enum NoteApp: String, CaseIterable {
         return ceil(widths.max() ?? 0)
     }
 
-    /// Ширина самой длинной строки текста в основном шрифте.
+    /// Width of the longest line of text in the main font.
     func textWidth(_ text: String) -> Double {
         let attributes: [NSAttributedString.Key: Any] = [.font: nsFont(size: fontSize)]
         return text.components(separatedBy: .newlines)
@@ -411,13 +411,13 @@ enum NoteApp: String, CaseIterable {
         periodTitleWidth = min(ceil(widest), Self.maxTitleWidth)
     }
 
-    /// Ширина текста в мелком шрифте (названия периодов).
+    /// Text width in the small font (period titles).
     func smallTextWidth(_ text: String) -> Double {
         (text as NSString).size(withAttributes: [.font: nsFont(size: (fontSize * 10 / 13).rounded())]).width
     }
 
-    /// Текст записи для показа в ленте: пробел сразу после эмодзи в начале строки сужается вдвое.
-    /// В файле и в поле ввода (edit) текст остаётся как напечатан.
+    /// Entry text for display in the feed: the space right after an emoji at the start of the line is halved.
+    /// In the file and in the input field (edit) the text stays as typed.
     func displayText(_ text: String) -> AttributedString {
         var result = AttributedString(text)
         guard let first = text.first, text.dropFirst().first == " ",
@@ -428,7 +428,7 @@ enum NoteApp: String, CaseIterable {
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: nsFont(size: fontSize)]).width
         let start = result.characters.index(after: result.startIndex)
         let end = result.characters.index(after: start)
-        // Кернинг сдвигает следующий за пробелом символ: отрицательный сужает промежуток.
+        // Kerning shifts the character after the space: a negative value narrows the gap.
         result[start..<end].kern = -spaceWidth / 2
         return result
     }
@@ -444,7 +444,7 @@ enum NoteApp: String, CaseIterable {
 
     var highlightColor: Color { highlight ?? textColor.opacity(0.15) }
 
-    /// Итоговый цвет текста.
+    /// Final text color.
     var textColor: Color {
         guard adapts, let rgb = NSColor(color).usingColorSpace(.sRGB) else { return color }
         var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
@@ -452,12 +452,12 @@ enum NoteApp: String, CaseIterable {
         return Color(hue: hue, saturation: saturation, brightness: Self.adjust(brightness: brightness, luminance: luminance))
     }
 
-    /// На тёмных обоях светлота цвета подтягивается вверх, на светлых вниз; оттенок и насыщенность остаются.
+    /// On dark wallpaper the color's lightness is raised, on light wallpaper lowered; hue and saturation stay.
     static func adjust(brightness: Double, luminance: Double) -> Double {
         luminance < 0.5 ? max(brightness, 0.9) : min(brightness, 0.25)
     }
 
-    /// Заново измеряет обои под окном.
+    /// Measures the wallpaper under the window again.
     func refresh(window: CGRect, on screen: NSScreen) {
         if let measured = Wallpaper.luminance(under: window, on: screen) {
             luminance = measured
@@ -471,8 +471,8 @@ enum NoteApp: String, CaseIterable {
 }
 
 enum Wallpaper {
-    /// Часть картинки обоев (доли 0...1, отсчёт от левого верхнего угла), лежащая под окном.
-    /// Обои считаем растянутыми по режиму «Fill»: картинка по центру, лишнее обрезано.
+    /// The part of the wallpaper image (fractions 0...1, origin at the top left) lying under the window.
+    /// The wallpaper is assumed stretched in "Fill" mode: the image centered, the excess cropped.
     static func cropRect(window: CGRect, screen: CGRect, imageSize: CGSize) -> CGRect {
         let imageAspect = imageSize.width / imageSize.height
         let screenAspect = screen.width / screen.height
@@ -487,9 +487,9 @@ enum Wallpaper {
             height: window.height / screen.height * visibleHeight)
     }
 
-    /// Последняя прочитанная уменьшенная картинка обоев. Декодирование большого файла занимает десятки миллисекунд
-    /// (Xcode предупреждал о задержке главного потока), а яркость пересчитывается при каждой смене режима и Space:
-    /// картинка читается заново, только если сменился файл обоев или время его изменения.
+    /// The last read downscaled wallpaper image. Decoding a large file takes tens of milliseconds
+    /// (Xcode warned about main thread latency), and brightness is recomputed on every mode and Space change:
+    /// the image is reread only if the wallpaper file or its modification time changed.
     private static var cachedThumbnail: (url: URL, modified: Date?, image: CGImage)?
 
     private static func thumbnail(for url: URL) -> CGImage? {
@@ -506,8 +506,8 @@ enum Wallpaper {
         return image
     }
 
-    /// Средняя яркость обоев под окном (0...1) или nil, если картинку обоев получить не удалось
-    /// (например, у динамических и видеообоев её может не быть).
+    /// Average brightness of the wallpaper under the window (0...1) or nil if the wallpaper image could not be obtained
+    /// (for example, dynamic and video wallpapers may not have one).
     static func luminance(under window: CGRect, on screen: NSScreen) -> Double? {
         guard let url = NSWorkspace.shared.desktopImageURL(for: screen), let image = thumbnail(for: url)
         else { return nil }
@@ -518,7 +518,7 @@ enum Wallpaper {
             .integral.intersection(CGRect(x: 0, y: 0, width: width, height: height))
         guard !crop.isNull, crop.width >= 1, crop.height >= 1, let part = image.cropping(to: crop) else { return nil }
 
-        // Область сжимается в один пиксель: его цвет и есть средний.
+        // The area is squeezed into one pixel: its color is the average.
         var pixel = [UInt8](repeating: 0, count: 4)
         let drawn = pixel.withUnsafeMutableBytes { buffer -> Bool in
             guard let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -536,7 +536,7 @@ enum Wallpaper {
 }
 
 extension Color {
-    /// RRGGBB или RRGGBBAA.
+    /// RRGGBB or RRGGBBAA.
     init?(hex: String) {
         guard hex.count == 6 || hex.count == 8, var value = UInt32(hex, radix: 16) else { return nil }
         if hex.count == 6 { value = value << 8 | 0xFF }

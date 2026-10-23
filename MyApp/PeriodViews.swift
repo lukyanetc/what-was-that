@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Всё, что относится к периодам в ленте: линии, названия, статичный слой режима «Период».
+/// Everything about periods in the feed: lines, titles, the static layer of "Period" mode.
 extension ContentView {
-    /// Положение строк начала и конца периодов в окне ленты (верх и низ, pt). По нему названия в scroll и edit плавно
-    /// едут по линии. Это отдельный наблюдаемый объект: при прокрутке обновляется только слой названий, а не вся лента.
+    /// Positions of the rows where periods start and end in the feed window (top and bottom, pt). Titles in scroll and edit
+    /// smoothly follow the line using it. This is a separate observable object: while scrolling only the titles layer updates, not the whole feed.
     @Observable final class PeriodFrames {
         var frames: [Date: ClosedRange<Double>] = [:]
     }
 
-    /// Название периода в строке его первого дня, слева от линий (locked и move).
+    /// Period title in the row of its first day, to the left of the lines (locked and move).
     struct PeriodTitles: View {
         let desktop: DesktopController
         let day: Date
@@ -17,7 +17,7 @@ extension ContentView {
             let appearance = desktop.appearance
             if appearance.showsPeriodMarks, desktop.shownPeriod != nil {
                 let calendar = Calendar.current
-                // Период, начавшийся раньше показанного, получает название в первой строке показанного периода.
+                // A period that started before the shown one gets its title in the first row of the shown period.
                 let shownStart = desktop.shownPeriod.map { calendar.startOfDay(for: $0.start) }
                 VStack(alignment: .trailing, spacing: 0) {
                     ForEach(appearance.periods.filter { period in
@@ -33,8 +33,8 @@ extension ContentView {
         }
     }
 
-    /// Названия периодов в scroll и edit: стоят у верхнего края окна, пока период виден, и плавно едут по линии.
-    /// До начала периода название едет вместе со строкой начала, в конце упирается в нижнюю границу периода.
+    /// Period titles in scroll and edit: they stay at the top edge of the window while the period is visible and smoothly follow the line.
+    /// Before the period starts, the title moves with the start row; at the end it rests against the period's bottom bound.
     struct StickyPeriodTitles: View {
         let desktop: DesktopController
         let days: [Date]
@@ -42,23 +42,23 @@ extension ContentView {
         let leadingInset: Double
         @Binding var visibleRange: ClosedRange<Int>
 
-        /// Индекс дня в ленте; вне ленты: до первого дня -1, после последнего `days.count`.
+        /// Day index in the feed; outside the feed: -1 before the first day, `days.count` after the last.
         private func index(of day: Date) -> Int {
             if let index = days.firstIndex(of: day) { return index }
             return day < (days.first ?? day) ? -1 : days.count
         }
 
-        /// Верх названия каждого видимого периода в окне ленты.
+        /// Top of each visible period's title in the feed window.
         private func placedTitles(_ appearance: Appearance) -> [(period: Period, y: Double)] {
             let calendar = Calendar.current
-            // Верхняя граница названия: ниже затухания у края окна.
+            // Top bound of the title: below the fade at the window edge.
             let stickyY = appearance.edgeFade
             var items: [(period: Period, y: Double)] = []
             for period in appearance.periods {
                 let start = calendar.startOfDay(for: period.start)
                 let end = calendar.startOfDay(for: period.end)
                 let first = index(of: start), last = index(of: end)
-                // Начало выше окна (идёт сверху вниз) или в окне; ниже окна период ещё не виден.
+                // Start is above the window (moving top to bottom) or in it; below the window the period is not visible yet.
                 let yStart: Double
                 if first < visibleRange.lowerBound {
                     yStart = -.infinity
@@ -82,7 +82,7 @@ extension ContentView {
                 let height = ContentView.titleHeight(period, appearance)
                 items.append((period, max(min(max(stickyY, yStart), yEnd - height), yStart)))
             }
-            // Названия, которые сошлись в одном месте, встают одно под другим.
+            // Titles that meet at one place stack one under another.
             return items.sorted { $0.y < $1.y }.reduce(into: [(period: Period, y: Double)]()) { result, item in
                 let below = result.last.map { $0.y + ContentView.titleHeight($0.period, appearance) } ?? -.infinity
                 result.append((item.period, max(item.y, below)))
@@ -104,8 +104,8 @@ extension ContentView {
         }
     }
 
-    /// Название периода: мелкий приглушённый шрифт, по правому краю колонки названий, рамка высотой в строку даты.
-    /// Под названием идущего периода, если включён счётчик, стоит «12 / 90».
+    /// Period title: small muted font, right-aligned in the titles column, frame as tall as the date row.
+    /// If the counter is on, "12 / 90" goes under the title of the running period.
     static func titleText(_ period: Period, _ appearance: Appearance) -> some View {
         VStack(alignment: .trailing, spacing: 0) {
             Text(appearance.uppercase ? period.name.uppercased() : period.name)
@@ -121,12 +121,12 @@ extension ContentView {
         .truncationMode(.tail)
     }
 
-    /// Высота названия: одна строка, а со счётчиком две.
+    /// Title height: one line, or two with the counter.
     static func titleHeight(_ period: Period, _ appearance: Appearance) -> Double {
         appearance.lineHeight * (appearance.counterText(period) == nil ? 1 : 2)
     }
 
-    /// Расстояние от левого края дат до левого края колонки названий (колонка названий → линии → даты).
+    /// Distance from the left edge of the dates to the left edge of the titles column (titles column → lines → dates).
     static func titleOffset(_ appearance: Appearance) -> Double {
         let edge = appearance.showsWeekNumber ? highlightInset : 4
         let lines = Double((appearance.periodLanes.values.max() ?? 0) + 1) * (lineWidth + lineGap)
@@ -135,41 +135,41 @@ extension ContentView {
 
     var lanes: [UUID: Int] { desktop.appearance.periodLanes }
 
-    /// Правый край колонки линий: за колонкой номеров недель (если она включена), иначе у самых дат.
+    /// Right edge of the lines column: past the week numbers column (if it is on), otherwise right at the dates.
     var lineColumnEdge: Double { desktop.appearance.showsWeekNumber ? Self.highlightInset : 4 }
 
-    /// Левый край линии периода; колонка 0 (вложенные) ближе к датам.
+    /// Left edge of a period line; column 0 (nested) is closer to the dates.
     func lineX(_ id: UUID) -> Double {
         -(lineColumnEdge + Self.lineGap + Self.lineWidth + Double(lanes[id] ?? 0) * (Self.lineWidth + Self.lineGap))
     }
 
-    /// Ширина колонок линий (внешняя линия дальше всех от дат).
+    /// Width of the line columns (the outer line is farthest from the dates).
     var lineColumnWidth: Double {
         guard let maxLane = lanes.values.max() else { return 0 }
         return Double(maxLane + 1) * (Self.lineWidth + Self.lineGap)
     }
 
-    /// Ширина колонки названий слева от линий: по самому длинному названию, но не больше `Appearance.maxTitleWidth`.
+    /// Width of the titles column to the left of the lines: by the longest title, but not more than `Appearance.maxTitleWidth`.
     var titleWidth: Double { desktop.appearance.periodTitleWidth }
 
-    /// Отступ ленты слева: запас под полосу «сегодня» и номера недель, а при периодах ещё под линии и названия.
+    /// Left inset of the feed: room for the "today" bar and week numbers, and with periods also for lines and titles.
     var leadingInset: Double {
         guard desktop.appearance.showsPeriodMarks else { return Self.highlightInset }
         let lines = max(Self.highlightInset, lineColumnEdge + lineColumnWidth + 2)
         return lines + (titleWidth > 0 ? Self.titleGap + titleWidth : 0)
     }
 
-    /// Первый день идущего периода в режиме «Период».
+    /// First day of the running period in "Period" mode.
     var activePeriodStart: Date? {
-        // Период, который не помещается в окно, отдельно не показывается: лента встаёт на «сегодня».
+        // A period that does not fit in the window is not shown separately: the feed rests on "today".
         guard desktop.appearance.viewKind == .period, desktop.periodFits else { return nil }
         return desktop.appearance.activePeriod.map { Self.calendar.startOfDay(for: $0.start) }
     }
 
-    /// Режим «Период» в locked и move: дни идущего периода отдельным статичным слоем, начало на `periodOffset` pt
-    /// ниже верха окна (точно, без прокрутки). Лента под ним невидима, но стоит так же и проявляется в scroll и edit.
+    /// "Period" mode in locked and move: the days of the running period as a separate static layer, the start `periodOffset` pt
+    /// below the top of the window (exactly, without scrolling). The feed under it is invisible but stands the same way and fades in on scroll and edit.
     @ViewBuilder var periodLayer: some View {
-        // В edit слой убран: его поля ввода дублировали бы поля ленты (общий фокус). К этому моменту он уже невидим.
+        // In edit the layer is removed: its input fields would duplicate the feed's fields (shared focus). By then it is already invisible.
         if desktop.appearance.viewKind == .period, desktop.mode != .edit, let period = desktop.appearance.activePeriod {
             let start = Self.calendar.startOfDay(for: period.start)
             VStack(alignment: .leading, spacing: 0) {
@@ -177,7 +177,7 @@ extension ContentView {
                     if let day = Self.calendar.date(byAdding: .day, value: offset, to: start) { dayItem(day) }
                 }
             }
-            // Высота периода решает, поместится ли он в окно (иначе режим показывает ленту).
+            // The period's height decides whether it fits in the window (otherwise the mode shows the feed).
             .onGeometryChange(for: Double.self) { $0.size.height } action: { desktop.periodContentHeight = $0 }
             .padding(.leading, leadingInset)
             .padding(.top, desktop.periodOffset)
@@ -188,16 +188,16 @@ extension ContentView {
         }
     }
 
-    /// Где в окне стоит первый день периода: на `periodOffset` pt ниже верха окна. Якорь прокрутки задаёт долю
-    /// высоты, в которой лежит одна и та же точка строки и окна, поэтому высота строки вычитается.
+    /// Where the first day of the period sits in the window: `periodOffset` pt below the top of the window. The scroll anchor sets a fraction
+    /// of the height at which the same point of the row and of the window lies, so the row height is subtracted.
     var periodAnchor: UnitPoint {
         let free = desktop.screenFrame.height - periodItemHeight
         guard free > 0 else { return .top }
         return UnitPoint(x: 0, y: min(max(desktop.periodOffset / free, 0), 1))
     }
 
-    /// Тонкие вертикальные линии слева от дат на протяжении периодов. `starting`: только периоды, начинающиеся
-    /// в этот день (линия идёт от их названия), иначе только начавшиеся раньше. Ближе к датам стоят вложенные.
+    /// Thin vertical lines to the left of the dates along the periods. `starting`: only periods starting
+    /// on this day (the line goes from their title), otherwise only those that started earlier. Nested ones sit closer to the dates.
     func periodLines(on day: Date, starting: Bool) -> some View {
         let active = !desktop.appearance.showsPeriodMarks ? [] : desktop.appearance.periods.filter {
             $0.contains(day) && (Self.calendar.startOfDay(for: $0.start) == day) == starting
@@ -215,7 +215,7 @@ extension ContentView {
     }
 }
 
-/// Режим «Период»: лента скрывается (плавно) и поверх неё лежит статичный слой периода. Вне этого режима вид не меняется.
+/// "Period" mode: the feed hides (smoothly) and a static period layer lies over it. Outside this mode the view does not change.
 struct PeriodSwap<Layer: View>: ViewModifier {
     let isActive: Bool
     let hidesContent: Bool

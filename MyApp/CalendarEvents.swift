@@ -1,7 +1,7 @@
 import EventKit
 import SwiftUI
 
-/// Как показывать события календаря рядом с записью дня.
+/// How to show calendar events next to a day's entry.
 enum EventsMode: String, CaseIterable {
     case show, future, hide
 
@@ -14,42 +14,42 @@ enum EventsMode: String, CaseIterable {
     }
 }
 
-/// Событие календаря (только чтение): название, начало и признак «весь день».
+/// Calendar event (read-only): title, start and an "all day" flag.
 struct CalendarEvent: Identifiable {
     let id: String
     let title: String
     let start: Date
     let end: Date
     let isAllDay: Bool
-    /// Цвет календаря события.
+    /// Color of the event's calendar.
     let color: Color
-    /// Приоритет календаря (0 — самый важный): им решается порядок событий с одним временем и какая копия остаётся.
+    /// Calendar priority (0 is the most important): decides the order of events with the same time and which copy stays.
     let rank: Int
 }
 
-/// События системного календаря Mac через EventKit. Google Calendar виден здесь, если аккаунт добавлен в системные настройки.
-/// События не копируются в файл данных: они только читаются и показываются.
+/// Events of the Mac's system calendar via EventKit. Google Calendar shows up here if the account is added in System Settings.
+/// Events are not copied into the data file: they are only read and displayed.
 @Observable final class CalendarEvents {
-    /// Календари, доступные для выбора (после выдачи доступа).
+    /// Calendars available for selection (after access is granted).
     private(set) var calendars: [(id: String, title: String, source: String, color: Color)] = []
     private(set) var isAuthorized = false
-    /// События по дням: ключ как у `DayStore.key`; сначала события на весь день, дальше по времени.
+    /// Events by day: key as in `DayStore.key`; all-day events first, then by time.
     private(set) var byDay: [String: [CalendarEvent]] = [:]
 
     @ObservationIgnored private let store = EKEventStore()
     @ObservationIgnored private var range: ClosedRange<Date>?
     @ObservationIgnored private var calendarIDs: Set<String> = []
-    /// Приоритет календарей: идентификаторы по порядку (первый важнее). Остальные идут после них.
+    /// Calendar priority: identifiers in order (the first is more important). The rest come after them.
     @ObservationIgnored private var order: [String] = []
     @ObservationIgnored private var observer: NSObjectProtocol?
 
-    /// Запрашивает доступ (системный диалог появляется один раз) и обновляет список календарей.
+    /// Requests access (the system dialog appears once) and refreshes the list of calendars.
     func requestAccess() async {
         let granted = (try? await store.requestFullAccessToEvents()) ?? false
         updateAuthorization(granted)
     }
 
-    /// Проверяет уже выданный доступ без диалога: вызывается при запуске.
+    /// Checks already granted access without a dialog: called at launch.
     func refreshAuthorization() {
         updateAuthorization(EKEventStore.authorizationStatus(for: .event) == .fullAccess)
     }
@@ -68,25 +68,25 @@ struct CalendarEvent: Identifiable {
         reload()
     }
 
-    /// Загружает события выбранных календарей за диапазон дней ленты (границы — начало первого и конец последнего дня).
+    /// Loads events of the selected calendars for the feed's day range (bounds are the start of the first day and the end of the last).
     func load(days: [Date], calendarIDs: Set<String>, order: [String]) {
         guard let first = days.first, let last = days.last else { return }
         let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last
         let newRange = first...end
-        // Тот же диапазон, те же календари и тот же приоритет: выборка уже на месте. Выход в scroll и обновление ленты
-        // больше не читают события заново (запрос за три года идёт в главном потоке); правки в календаре приходят
-        // через EKEventStoreChanged.
+        // Same range, same calendars and same priority: the fetch is already in place. Entering scroll and refreshing the feed
+        // no longer reread events (a three-year query runs on the main thread); calendar edits arrive
+        // through EKEventStoreChanged.
         let sameQuery = newRange == range && calendarIDs == self.calendarIDs
         guard !sameQuery || order != self.order else { return }
         range = newRange
         self.calendarIDs = calendarIDs
         self.order = order
-        // Сменился только приоритет (перетаскивание в настройках): события уже прочитаны, их достаточно переразложить
-        // без нового запроса к EventKit, который был причиной задержки при перетаскивании.
+        // Only the priority changed (dragging in settings): events are already read, they just need to be rearranged
+        // without a new EventKit query, which was the cause of the delay while dragging.
         if sameQuery { rebuild() } else { reload() }
     }
 
-    /// События, прочитанные из EventKit последним запросом (до разбора по дням и дубликатам).
+    /// Events read from EventKit by the last query (before splitting by day and removing duplicates).
     @ObservationIgnored private var fetched: [EKEvent] = []
 
     private func reload() {
@@ -98,14 +98,14 @@ struct CalendarEvent: Identifiable {
         rebuild()
     }
 
-    /// Раскладывает прочитанные события по дням: убирает дубликаты и сортирует с учётом приоритета календарей.
+    /// Distributes the events read onto days: removes duplicates and sorts with calendar priority.
     private func rebuild() {
         guard let range else { return }
         var result: [String: [CalendarEvent]] = [:]
         let calendar = Calendar.current
-        // Одно и то же событие бывает сразу в нескольких календарях (например, приглашение в Google и копия в iCloud):
-        // событие с тем же названием, началом и концом показывается один раз.
-        // Копия из более приоритетного календаря идёт первой и остаётся (цвет кружка тоже от неё).
+        // The same event can be in several calendars at once (for example, a Google invitation and an iCloud copy):
+        // an event with the same title, start and end is shown once.
+        // The copy from the higher-priority calendar goes first and stays (the dot color comes from it as well).
         let ranks = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         func rank(_ event: EKEvent) -> Int { ranks[event.calendar.calendarIdentifier] ?? order.count }
         var seen: Set<String> = []
@@ -115,14 +115,14 @@ struct CalendarEvent: Identifiable {
             let item = CalendarEvent(id: id, title: event.title ?? "", start: event.startDate, end: event.endDate,
                                      isAllDay: event.isAllDay,
                                      color: event.calendar.cgColor.map { Color(cgColor: $0) } ?? .gray, rank: rank(event))
-            // Многодневное событие попадает в каждый свой день. Конец у событий «до полуночи» не включается.
+            // A multi-day event lands on each of its days. The end of "until midnight" events is not included.
             var day = calendar.startOfDay(for: event.startDate)
             repeat {
                 result[DayStore.key(for: day), default: []].append(item)
                 day = calendar.date(byAdding: .day, value: 1, to: day) ?? .distantFuture
             } while day < event.endDate && day <= range.upperBound
         }
-        // Сначала события на весь день, потом по времени начала; при одинаковом времени выше приоритетный календарь.
+        // All-day events first, then by start time; with equal time the higher-priority calendar goes first.
         byDay = result.mapValues {
             $0.sorted {
                 if $0.isAllDay != $1.isAllDay { return $0.isAllDay }
@@ -131,7 +131,7 @@ struct CalendarEvent: Identifiable {
         }
     }
 
-    /// События дня с учётом режима. В режиме «только будущие» прошедшие события не возвращаются, а считаются в `hidden`.
+    /// A day's events according to the mode. In "future only" mode, past events are not returned but counted in `hidden`.
     func events(on day: Date, mode: EventsMode, now: Date = .now) -> (shown: [CalendarEvent], hidden: Int) {
         let all = byDay[DayStore.key(for: day)] ?? []
         switch mode {

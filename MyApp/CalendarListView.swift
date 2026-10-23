@@ -1,20 +1,20 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Список календарей в настройках по аккаунтам (iCloud, Google и так далее): галочка и название цветом календаря.
-/// Порядок внутри аккаунта меняется перетаскиванием строки: выше в списке значит выше в ленте и побеждает при дубликатах.
-/// Это отдельный вид со своим состоянием: линия-«прицел» при перетаскивании обновляет только его, а не всё окно
-/// настроек (иначе перетаскивание подтормаживало).
+/// List of calendars in settings grouped by account (iCloud, Google and so on): a checkbox and the name in the calendar's color.
+/// The order within an account changes by dragging a row: higher in the list means higher in the feed and wins on duplicates.
+/// This is a separate view with its own state: the "crosshair" line during dragging updates only it, not the whole settings
+/// window (otherwise dragging lagged).
 struct CalendarListView: View {
     let appearance: Appearance
     let events: CalendarEvents
-    /// Календарь, который сейчас тащат, и строка, над которой он висит.
+    /// The calendar being dragged and the row it hovers over.
     @State private var draggedID: String?
     @State private var dropTarget: String?
 
     private typealias CalendarItem = (id: String, title: String, source: String, color: Color)
 
-    /// Календари в порядке приоритета (порядок в настройках); новые, которых в порядке ещё нет, идут в конце.
+    /// Calendars in priority order (the order in settings); new ones not yet in the order go last.
     private var orderedCalendars: [CalendarItem] {
         let order = appearance.eventCalendarOrder
         return events.calendars.enumerated().sorted { a, b in
@@ -23,7 +23,7 @@ struct CalendarListView: View {
         }.map(\.element)
     }
 
-    /// Календари по аккаунтам: аккаунты по порядку первого календаря в приоритете.
+    /// Calendars by account: accounts ordered by their first calendar in the priority.
     private var groups: [(source: String, items: [CalendarItem])] {
         var sources: [String] = []
         var bySource: [String: [CalendarItem]] = [:]
@@ -34,8 +34,8 @@ struct CalendarListView: View {
         return sources.compactMap { source in bySource[source].map { (source, $0) } }
     }
 
-    /// Переносит календарь на место другого в том же аккаунте: перетаскивание вниз ставит его после, вверх до.
-    /// Общий порядок приоритета меняется только на местах, которые занимал этот аккаунт.
+    /// Moves a calendar to the place of another one in the same account: dragging down puts it after, up puts it before.
+    /// The overall priority order changes only at the positions this account occupied.
     private func move(_ dragged: String, onto target: String, among siblings: [String]) {
         guard let from = siblings.firstIndex(of: dragged), let to = siblings.firstIndex(of: target), from != to else { return }
         var group = siblings
@@ -47,8 +47,8 @@ struct CalendarListView: View {
         appearance.eventCalendarOrder = all
     }
 
-    /// С какого края строки рисовать линию «сюда упадёт»: тащим вниз, значит календарь встанет после строки (линия снизу),
-    /// вверх, значит до неё (линия сверху). nil, если линия не нужна.
+    /// Which edge of the row to draw the "drops here" line on: dragging down means the calendar lands after the row (line at the bottom),
+    /// up means before it (line at the top). nil if no line is needed.
     private func lineEdge(for id: String, siblings: [String]) -> Alignment? {
         guard dropTarget == id, let dragged = draggedID, dragged != id,
               let from = siblings.firstIndex(of: dragged), let to = siblings.firstIndex(of: id) else { return nil }
@@ -89,7 +89,7 @@ struct CalendarListView: View {
         }
         .padding(.vertical, 3)
         .padding(.horizontal, 4)
-        // Полоска-прицел на границе между строками: показывает, куда встанет тащимый календарь.
+        // A crosshair strip on the boundary between rows: shows where the dragged calendar will land.
         .overlay(alignment: edge ?? .top) {
             if edge != nil {
                 Capsule().fill(Color.accentColor).frame(height: 2).offset(y: edge == .bottom ? 2 : -2)
@@ -106,7 +106,7 @@ struct CalendarListView: View {
     }
 }
 
-/// Приём перетаскивания на строку списка: только внутри одного аккаунта; следит, над какой строкой висит курсор.
+/// Drop target on a list row: only within one account; tracks which row the cursor hovers over.
 private struct RowDropDelegate: DropDelegate {
     let id: String
     let siblings: [String]
@@ -127,8 +127,8 @@ private struct RowDropDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         defer { dragged = nil; target = nil }
-        // Содержимое перетаскивания забираем (его значение нам не нужно, мы знаем календарь по `dragged`): пока
-        // получатель не заберёт данные, система держит картинку перетаскиваемой строки на экране ещё около секунды.
+        // We take the drag content (its value is not needed, we know the calendar from `dragged`): until
+        // the receiver takes the data, the system keeps the image of the dragged row on screen for about another second.
         if let provider = info.itemProviders(for: [.text]).first {
             _ = provider.loadObject(ofClass: NSString.self) { _, _ in }
         }
