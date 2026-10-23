@@ -1,75 +1,65 @@
-# What Was That!?
+<p align="center">
+  <img src="MyApp/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="What Was That!? icon">
+</p>
 
-Календарь-лента на рабочем столе macOS. Живёт на уровне обоев, не мешает работе и отвечает на вопрос не «что у меня во сколько», а «что в этом дне главное и какой он был».
+<h1 align="center">What Was That!?</h1>
 
-У каждого дня одна короткая строка (при желании с эмодзи в начале). Сегодняшний день подсвечен, выходные приглушены, записи делаются прямо в ленте.
+<p align="center">
+  <a href="https://github.com/lukyanetc/what-was-that/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/lukyanetc/what-was-that/issues">Report a problem</a>
+</p>
 
-## Возможности
+Days fly by, and sometimes one question comes to mind: what was that?!
 
-- Окно на уровне обоев на всех Spaces, без значка в Dock, Cmd-Tab и Mission Control. Управление через значок в строке меню.
-- Лента дней, заголовки месяцев, подсветка сегодняшнего дня, приглушённые выходные, номера недель, отступ между неделями.
-- Виды (View): Feed, Month, Week, Range.
-- Свои диапазоны (Ranges): название, даты, линии рядом с датами, счётчик дней.
-- Цветные индикаторы дней (9 цветов; соседние дни одного цвета сливаются в полосу).
-- Настройки внешнего вида: цвет и прозрачность текста, автоподстройка под яркость обоев, шрифт и размер, расстояние между строками, ширина окна, затухание у краёв, цвет линии «сегодня», формат даты и месяца (в духе moment.js), заглавные буквы.
-- Данные в одном JSON-файле `~/Documents/what-was-that.json` (раньше `d-cal.json`: при первом запуске новой версии он копируется под новым именем). Без аккаунтов и сервера.
+*Inspired by the video [Linear Calendar in Apple Notes](https://www.youtube.com/watch?v=Et_QEhwwmec&t=11s) from the New Perspectives channel.*
 
-## Режимы окна
+A quiet day-by-day timeline on your macOS desktop that doesn't get in the way of your work.<br>
+One entry per day, to remember or plan what matters.
 
-| Режим | Что происходит |
-|---|---|
-| locked | Окно под значками рабочего стола, клики и скролл проходят сквозь него. |
-| scroll | Окно ловит колесо и жесты, ленту можно листать. Текст не редактируется. |
-| edit | Окно получает клавиатурный фокус, можно писать. |
-| move | Окно двигается мышью (лента только по горизонтали). Включается пунктом «Переместить окно» в меню. |
+<p align="center"><img src="demo.gif" width="600" alt="What Was That!? demo"></p>
 
-- **Opt+M** переключает locked → scroll → edit → locked.
-- **Esc** возвращает в locked из любого режима.
-- В edit: стрелки вверх/вниз и Enter переходят на соседний день, Shift+Enter добавляет строку в день.
-- В правом верхнем углу индикатор режима. `locked` показывается секунду и гаснет.
+<p align="center"><img src="screenshot.png" width="800" alt="What Was That!? on the desktop"></p>
 
-## Формат данных
+## Features
 
-```json
-{
-  "2026-03-10" : { "text" : "🚧 Начало ремонта ванной", "color" : 2 },
-  "2026-03-12" : { "text" : "⚠️ Сантехник" }
-}
-```
+- **Not a widget!** Clicks pass through the app until you press `opt+m`.
+- **Customization.** Set everything to your taste — date format, size, font, opacity and more.
+- **Feed, Range, Month or Week.** Everyone sees time in their own way.
+- **A color for every day.** Mood, vacation, weather — come up with your own meaning. Consecutive days of the same color merge into a stripe.
+- **Calendar.** If you need it, turn on your Mac's calendars.
+- **If one line isn't enough,** press `shift+enter` and keep writing.
+- **If you really run out of room,** press `↗` and create a note in Obsidian or Apple Notes.
+- **No accounts, no servers.** Everything is stored in plain JSON in your Documents folder. Export all your entries anytime.
 
-Ключ — день в локальном часовом поясе (`yyyy-MM-dd`). `color` — необязательный номер цвета индикатора. Запись атомарная, файл перед записью перечитывается, битый файл не перезаписывается. Периоды и настройки хранятся в UserDefaults.
+  ```json
+  {
+    "2026-03-10": { "text": "🚧 Started the bathroom renovation", "color": 2 },
+    "2026-03-12": { "text": "⚠️ Plumber" }
+  }
+  ```
 
-## Формат даты
+- You can put the file in iCloud Drive to sync between Macs.
 
-Строка в духе moment.js, только дата: `YYYY YY`, `Q`, `M MM MMM MMMM`, `D Do DD`, `DDD`, `d dd ddd dddd`, `E`, `w`, `W`, `gg gggg GG GGGG`. Текст в `[скобках]` выводится как есть. Названия английские. По умолчанию `DD ddd`.
+## Install
 
-## Требования и сборка
+Requires macOS 15 Sequoia or later. Download the `.dmg` from the [latest release](https://github.com/lukyanetc/what-was-that/releases/latest).
 
-- macOS 15 или новее, Xcode.
-- Открыть `d-cal.xcodeproj`, схема `MyApp`, собрать и запустить. App Sandbox выключен.
-- Тесты (Swift Testing, цель `MyAppTests`) идут в хосте приложения. Перед запуском тестов приложение нужно собрать схемой `MyApp`.
+The app isn't signed by Apple, so you need to allow the first launch manually: **System Settings → Privacy & Security → Open Anyway**. Step-by-step instructions are inside the `.dmg`.
 
-## Установка и релиз
+## Build from source
 
-- Для пользователей: [docs/INSTALL.md](docs/INSTALL.md) (установка, первый запуск, разрешения).
-- Сборка релиза для друзей: `scripts/build-release.sh`. Скрипт собирает Release (Intel и Apple Silicon) без подписи Apple и кладёт `.app`, `.zip` и `.dmg` в `dist/` (папка не коммитится).
-- Без платной подписи Mac при первом открытии просит подтверждение (см. INSTALL.md). Для публичного релиза без предупреждений нужны Apple Developer ID и нотаризация.
-- Проверка обновлений ищет последний релиз на GitHub Releases: тег вида `v1.0.1` должен совпадать с версией приложения.
+You'll need macOS 15+ and Xcode. Open `d-cal.xcodeproj`, select the `MyApp` scheme and run. App Sandbox is off: the app needs access to its data file in any folder, including iCloud Drive.
 
-## Структура
+`scripts/build-release.sh` makes a release build: a universal app (Intel and Apple Silicon) without signing, output as `.app`, `.zip` and `.dmg` in `dist/`.
 
-| Файл | Назначение |
-|---|---|
-| `MyApp.swift` | Точка входа, меню в строке меню, окно настроек |
-| `DesktopWindow.swift` | Окно, режимы, хоткеи, фокус |
-| `ContentView.swift` | Лента, периоды, индикаторы, редактирование |
-| `DayStore.swift` | Чтение и запись JSON |
-| `Appearance.swift` | Настройки, шрифты, измерение яркости обоев |
-| `Period.swift` | Модель периода |
-| `MomentFormat.swift` | Форматирование даты |
-| `SettingsView.swift` | Окно настроек |
-| `HotKey.swift` | Глобальный хоткей (Carbon) |
+Tests: the `MyAppTests` target (Swift Testing). Build `MyApp` before running them.
 
-## Лицензии
+## Thanks
 
-Встроенные шрифты (JetBrains Mono, IBM Plex Mono, Fira Code, Geist Mono) распространяются по SIL OFL, тексты лицензий лежат в `MyApp/Fonts`.
+`[100% vibe coding]`
+
+Thanks to the [New Perspectives](https://www.youtube.com/watch?v=Et_QEhwwmec&t=11s) channel for the idea of a linear calendar.<br>
+Thanks to these times, when even I could make my own app.<br>
+Claude Code — ❤️
+
+The bundled fonts JetBrains Mono, IBM Plex Mono, Fira Code and Geist Mono are distributed under the SIL Open Font License; license texts are in `MyApp/Fonts`.
