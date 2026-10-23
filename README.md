@@ -16,7 +16,7 @@ One entry per day, to remember or plan what matters.
 *Inspired by the video [Linear Calendar in Apple Notes](https://www.youtube.com/watch?v=Et_QEhwwmec&t=11s) from the New Perspectives channel.*
 
 
-<p align="center"><img src="demo.gif" width="600" alt="What Was That!? demo"></p>
+<p align="left"><img src="demo.gif" width="600" alt="What Was That!? demo"></p>
 
 ## Features
 
