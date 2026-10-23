@@ -25,8 +25,9 @@ One entry per day, to remember or plan what matters.
 - **Feed, Range, Month or Week.** Everyone sees time in their own way.
 - **A color for every day.** Mood, vacation, weather — come up with your own meaning. Consecutive days of the same color merge into a stripe.
 - **Calendar.** If you need it, turn on your Mac's calendars.
-- **If one line isn't enough,** press `shift+enter` and keep writing.
+- **If one line isn't enough,** press `shift+enter`, `cmd+enter` or `opt+enter` and keep writing.
 - **If you really run out of room,** press `↗` and create a note in Obsidian or Apple Notes.
+- **Always there.** Starts at login by default; turn it off in Settings → General.
 - **No accounts, no servers.** Everything is stored in plain JSON in your Documents folder. Export all your entries anytime.
 
 ## Screenshot
@@ -47,9 +48,15 @@ One entry per day, to remember or plan what matters.
 
 ## Install
 
-Requires macOS 15 Sequoia or later. Download the `.dmg` from the [latest release](https://github.com/lukyanetc/what-was-that/releases/latest).
+Requires macOS 15 Sequoia or later.
 
-The app isn't signed by Apple, so you need to allow the first launch manually: **System Settings → Privacy & Security → Open Anyway**. Step-by-step instructions are inside the `.dmg`.
+**Homebrew:**
+
+```
+brew install --cask lukyanetc/tap/what-was-that
+```
+
+**Manually:** download the `.dmg` from the [latest release](https://github.com/lukyanetc/what-was-that/releases/latest). The app isn't signed by Apple, so you need to allow the first launch manually: **System Settings → Privacy & Security → Open Anyway**. Step-by-step instructions are inside the `.dmg`. (Homebrew does this for you.)
 
 ## Build from source
 
