@@ -1,3 +1,5 @@
+*Days fly by, and sometimes one question comes to mind: what was that?!*
+
 <p align="center">
   <img src="MyApp/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="What Was That!? icon">
 </p>
@@ -5,20 +7,16 @@
 <h1 align="center">What Was That!?</h1>
 
 <p align="center">
-  <a href="https://github.com/lukyanetc/what-was-that/releases/latest"><b>Download</b></a> ·
-  <a href="https://github.com/lukyanetc/what-was-that/issues">Report a problem</a>
+  <a href="https://github.com/lukyanetc/what-was-that/releases/latest">Download</a>
 </p>
 
-Days fly by, and sometimes one question comes to mind: what was that?!
+A quiet day-by-day timeline on your macOS desktop that doesn't get in the way of your work.
+One entry per day, to remember or plan what matters.
 
 *Inspired by the video [Linear Calendar in Apple Notes](https://www.youtube.com/watch?v=Et_QEhwwmec&t=11s) from the New Perspectives channel.*
 
-A quiet day-by-day timeline on your macOS desktop that doesn't get in the way of your work.<br>
-One entry per day, to remember or plan what matters.
 
 <p align="center"><img src="demo.gif" width="600" alt="What Was That!? demo"></p>
-
-<p align="center"><img src="screenshot.png" width="800" alt="What Was That!? on the desktop"></p>
 
 ## Features
 
@@ -30,6 +28,13 @@ One entry per day, to remember or plan what matters.
 - **If one line isn't enough,** press `shift+enter` and keep writing.
 - **If you really run out of room,** press `↗` and create a note in Obsidian or Apple Notes.
 - **No accounts, no servers.** Everything is stored in plain JSON in your Documents folder. Export all your entries anytime.
+
+## Screenshot
+
+
+<p align="center"><img src="screenshot.png" width="800" alt="What Was That!? on the desktop"></p>
+
+
 
   ```json
   {
