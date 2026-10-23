@@ -198,6 +198,7 @@ final class DesktopWindow: NSWindow {
         }
         apply()
         events.refreshAuthorization()
+        enableLoginItemOnFirstLaunch()
         if appearance.checksUpdatesAtLaunch { Task { await updates.checkAtLaunch() } }
 
         // Opt+M: locked → scroll → edit → locked
@@ -232,9 +233,9 @@ final class DesktopWindow: NSWindow {
                 let isReturn = code != kVK_UpArrow && code != kVK_DownArrow
                 let editor = self.window?.firstResponder as? NSTextView
                 if let editor {
-                    // Несколько строк в дне: Shift+Enter добавляет строку, стрелки сначала ходят по строкам дня
-                    // и переходят на другой день только с первой (вверх) или последней (вниз) строки.
-                    if isReturn, event.modifierFlags.contains(.shift) {
+                    // Несколько строк в дне: Shift+Enter, Cmd+Enter или Opt+Enter добавляют строку, стрелки сначала
+                    // ходят по строкам дня и переходят на другой день только с первой (вверх) или последней (вниз) строки.
+                    if isReturn, !event.modifierFlags.isDisjoint(with: [.shift, .command, .option]) {
                         lastUserInput = .now
                         editor.insertNewlineIgnoringFieldEditor(nil)
                         return nil

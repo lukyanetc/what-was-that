@@ -16,6 +16,7 @@ struct SettingsView: View {
     /// Новый диапазон, пока он не добавлен: название и срок (по умолчанию неделя с сегодняшнего дня).
     /// Выбранная закладка.
     @State private var tab = Tab.general
+    @State private var startsAtLogin = LoginItem.isEnabled
     /// Диапазон в списке, который сейчас правится (остальные показаны текстом).
     @State private var editingRangeID: UUID?
     @State private var frozenRangeOrder: [UUID]?
@@ -102,6 +103,12 @@ struct SettingsView: View {
                     ForEach(ViewKind.allCases, id: \.self) { Text($0.title) }
                 }
                 .pickerStyle(.segmented)
+            }
+            Section("Startup") {
+                Toggle("Start at login", isOn: Binding(get: { startsAtLogin }, set: {
+                    LoginItem.set($0)
+                    startsAtLogin = LoginItem.isEnabled
+                }))
             }
             Section("Keyboard Shortcut") {
                 HotKeyRecorder(desktop: desktop)
