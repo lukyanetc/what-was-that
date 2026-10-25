@@ -70,7 +70,7 @@ Tests: the `MyAppTests` target (Swift Testing). Build `MyApp` before running the
 `[100% vibe coding]`
 
 Thanks to the [New Perspectives](https://www.youtube.com/watch?v=Et_QEhwwmec&t=11s) channel for the idea of a linear calendar.<br>
-Thanks to these times, when even I could make my own app.<br>
+Thanks to present times, when even I could make my own app.<br>
 Claude Code — ❤️
 
 The bundled fonts JetBrains Mono, IBM Plex Mono, Fira Code and Geist Mono are distributed under the SIL Open Font License; license texts are in `MyApp/Fonts`.
